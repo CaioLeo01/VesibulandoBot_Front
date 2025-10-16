@@ -30,6 +30,7 @@
           <br>
           <button class="btn btn-config" @click="openFiltro">Filtros</button>
           <button class="btn btn-config" @click="openPergunta">Adicionar nova Pergunta</button>
+          <button class="btn btn-config" @click="goConfigurarSimulado">Configurar Simulado</button>
         </section>
 
         <!-- Grid principal -->
@@ -59,11 +60,7 @@
             </table>
           </aside>
           <aside class="panel panel-summary">
-            <h3>Desempenho Pessoal</h3>
-            <ul class="summary-list">
-              <li><span>Acertos</span><b>{{ personalAcertos }}</b></li>
-              <li><span>% Acertos</span><b>{{ personalPercentualAcertos }}</b></li>
-            </ul>
+
           </aside>
         </section>
 
@@ -305,6 +302,10 @@ async function skipQuestion() {
   } finally {
     loading.value = false
   }
+}
+
+function goConfigurarSimulado() {
+  router.push({ name: 'ConfigurarSimulado' })
 }
 
 /* Logout */

@@ -1,4 +1,4 @@
-<template> 
+<template>
   <div class="challenge">
     <!-- Top bar (mobile) -->
     <header class="challenge-top">
@@ -20,21 +20,20 @@
 
       <!-- Conteúdo -->
       <div class="center">
-       
-
-        <!-- Painel: configurar  -->
+        <!-- Painel: configurar -->
         <section class="panel panel-config">
           <header class="panel-top">
             <div>
               <h2>Configurar desafio</h2>
-              <p class="header-sub">Simulados, foco e progresso contínuo. Mude as opções quando quiser.</p>
+              <p class="header-sub">
+                Simulados, foco e progresso contínuo. Mude as opções quando quiser.
+              </p>
             </div>
             <button class="btn btn-config" @click="openConfig">Configurar desafio</button>
           </header>
-
         </section>
 
-        <!-- Grid principal: questão + resumo -->
+        <!-- Grid principal -->
         <section class="grid-panels">
           <!-- Painel questão -->
           <div class="panel panel-question">
@@ -44,31 +43,39 @@
               </div>
             </div>
 
-            <article class="question-card">
-              <h4 class="question-title">{{ question.title }}</h4>
+            <article class="question-card" v-if="currentQuestion && !finished">
+              <h4 class="question-title">
+                {{ questionIndex + 1 }}. {{ currentQuestion.enunciado }}
+              </h4>
 
-              <!-- Alternativas A, B, C, D -->
               <div class="options">
                 <label
-                  v-for="opt in question.options"
-                  :key="opt.key"
+                  v-for="opt in ['A','B','C','D','E']"
+                  :key="opt"
                   class="option"
-                  :class="{ selected: selectedOption === opt.key }"
+                  :class="{ selected: selectedOption === opt }"
                 >
-                  <input type="radio" :value="opt.key" v-model="selectedOption" />
-                  <span class="opt-key">{{ opt.key }}</span>
-                  <span class="opt-text">{{ opt.text }}</span>
+                  <input type="radio" :value="opt" v-model="selectedOption" />
+                  <span class="opt-key">{{ opt }}</span>
+                  <span class="opt-text">
+                    {{ currentQuestion[`alternativa_${opt.toLowerCase()}`] }}
+                  </span>
                 </label>
               </div>
 
-              <!-- APENAS 2 BOTÕES: Pular e Confirmar -->
-              
+              <div class="actions-row">
+                <button class="btn btn-skip" @click="skipQuestion" :disabled="loading">Pular</button>
+                <button class="btn btn-confirm" @click="confirmAnswer" :disabled="loading || !selectedOption">Confirmar</button>
+                <button class="btn btn-finish" @click="finalizarSimulado" :disabled="loading">Finalizar</button>
+              </div>
             </article>
-            <!-- A��es no rodap� do painel -->
-            <div class="actions-row">
-              <button class="btn btn-skip" @click="skipQuestion" :disabled="loading">Pular</button>
-              <button class="btn btn-confirm" @click="confirmAnswer" :disabled="loading || !selectedOption">Confirmar</button>
-            </div>
+
+            <article v-else class="question-card">
+              <h4 class="question-title">
+                {{ finished ? 'Simulado concluído!' : 'Selecione um simulado para começar.' }}
+              </h4>
+              <p v-if="finished">Seus resultados foram enviados com sucesso.</p>
+            </article>
           </div>
 
           <!-- Painel resumo -->
@@ -76,8 +83,7 @@
             <h3>Resumo do desafio</h3>
             <ul class="summary-list">
               <li><span>Simulado</span><b>{{ labelSimulado }}</b></li>
-              <li><span>Matéria</span><b>{{ labelCategoria }}</b></li>
-              <li><span>Dificuldade</span><b>{{ labelDificuldade }}</b></li>
+              <li><span>Matéria</span><b>{{ labelMateria }}</b></li>
               <li><span>Ano</span><b>{{ labelAno }}</b></li>
             </ul>
             <div class="summary-timer">
@@ -85,36 +91,15 @@
             </div>
           </aside>
         </section>
-
-        <!-- RODAPÉ: Botão Finalizar que para o cronômetro do RESUMO -->
-        <footer class="page-footer">
-          <button
-            class="btn btn-finish"
-            @click="finalizarResumo"
-            :disabled="resumoParado"
-            :aria-pressed="resumoParado ? 'true' : 'false'"
-          >
-            {{ resumoParado ? 'Finalizar' : 'Finalizar' }}
-          </button>
-        </footer>
       </div>
     </div>
 
     <!-- Mobile sidebar -->
     <transition name="fade">
-      <div
-        v-if="sidebarOpen"
-        class="mobile-sidebar-overlay"
-        @click="closeSidebar"
-      ></div>
+      <div v-if="sidebarOpen" class="mobile-sidebar-overlay" @click="closeSidebar"></div>
     </transition>
-
     <transition name="slide">
-      <div
-        v-if="sidebarOpen"
-        class="mobile-sidebar-panel"
-        @click.stop
-      >
+      <div v-if="sidebarOpen" class="mobile-sidebar-panel" @click.stop>
         <div class="mobile-sidebar-header">
           <button class="close" type="button" @click="closeSidebar">
             <i class="fa-solid fa-xmark"></i>
@@ -135,10 +120,11 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import ChallengeConfigModal from '@/components/challenge/ChallengeConfigModal.vue'
+import { listarSimulados, listarQuestoesSimulado, registrarResultadoSimulado } from '@/services/simulado.js'
 import { logout as doLogout } from '@/services/auth.js'
 import logoUrl from '../assets/Icone.ico'
 
@@ -147,281 +133,138 @@ const route = useRoute()
 const sidebarOpen = ref(false)
 const logo = logoUrl
 
-function openSidebar() {
-  sidebarOpen.value = true
-}
+function openSidebar() { sidebarOpen.value = true }
+function closeSidebar() { sidebarOpen.value = false }
+function handleMobileLogout() { closeSidebar(); onLogout() }
 
-function closeSidebar() {
-  sidebarOpen.value = false
-}
-
-function handleMobileLogout() {
-  closeSidebar()
-  onLogout()
-}
-
-/* ======================= API ======================= */
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
-
-async function apiFetch(path, { method = 'GET', headers = {}, body } = {}) {
-  const token = localStorage.getItem('token')
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers
-    },
-    body: body ? JSON.stringify(body) : undefined
-  })
-  const isJson = res.headers.get('content-type')?.includes('application/json')
-  const data = isJson ? await res.json().catch(() => null) : null
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`)
-  return data
-}
-
-async function apiStartChallenge(cfg) {
-  // POST /challenges/start -> { challengeId, question }
-  return apiFetch('/challenges/start', { method: 'POST', body: cfg })
-}
-async function apiNextQuestion(challengeId) {
-  // GET /challenges/:id/next -> { finished, question? }
-  return apiFetch(`/challenges/${challengeId}/next`)
-}
-async function apiSubmitAnswer({ challengeId, questionId, answer }) {
-  // POST /challenges/:id/answers
-  return apiFetch(`/challenges/${challengeId}/answers`, {
-    method: 'POST',
-    body: { questionId, answer }
-  })
-}
-async function apiSkipQuestion({ challengeId, questionId }) {
-  // POST /challenges/:id/skip
-  return apiFetch(`/challenges/${challengeId}/skip`, {
-    method: 'POST',
-    body: { questionId }
-  })
-}
-
-/* ---------- Opções ---------- */
-const simulados = [
-  { label: 'ENEM por Matéria', value: 'enem-mix' },
-  { label: 'ENEM por Blocos', value: 'enem-2022' },
-]
-
-/* ---------- Estado: configurado? ---------- */
+/* ---------- Estado ---------- */
+const showModal = ref(false)
 const isConfigured = ref(false)
-
-/* ---------- Config ---------- */
+const simulados = ref([])
 const config = reactive({
-  // default só para o modal; resumo mostra — até configurar
-  simulado: 'enem-mix',
-  categoria: 'todas',
-  dificuldade: 'medio',
-  ano: new Date().getFullYear(),
-  simuladoLabel: simulados.find(s => s.value === 'enem-mix')?.label || 'Simulado Misturado ENEM',
-  categoriaLabel: 'Todas as matérias',
-  dificuldadeLabel: 'Médio'
+  simulado: null,
+  materia: null,
+  simuladoLabel: '',
+  materiaLabel: '',
+  ano: null
 })
 
-/* ---------- Labels do Resumo ---------- */
-const labelSimulado = computed(() =>
-  isConfigured.value
-    ? (config.simuladoLabel || simulados.find(s => s.value === config.simulado)?.label || '—')
-    : '—'
-)
-const labelCategoria = computed(() => (isConfigured.value ? (config.categoriaLabel || '—') : '—'))
-const labelDificuldade = computed(() =>
-  isConfigured.value
-    ? (config.dificuldadeLabel || ({ facil:'Fácil', medio:'Médio', dificil:'Difícil' }[config.dificuldade] || '—'))
-    : '—'
-)
-const labelAno = computed(() => (isConfigured.value ? (config.ano ?? '—') : '—'))
-
-/* ---------- Modal ---------- */
-const showModal = ref(false)
-function openConfig() { showModal.value = true }
-async function applyConfig(payload) {
-  Object.assign(config, payload)
-  showModal.value = false
-
-  // marca como configurado e timers
-  isConfigured.value = true
-  resetResumo()
-  resetCountdown()
-  iniciarResumo()
-  iniciarCountdown()
-
-  // inicia o desafio no backend e carrega a primeira questão
-  await startChallenge()
-}
-
-/* ============== Estado do desafio (backend) ============== */
-const challengeId = ref(null)
+/* ---------- Questões ---------- */
+const questionList = ref([])
+const questionIndex = ref(0)
+const selectedOption = ref(null)
 const loading = ref(false)
 const finished = ref(false)
-const error = ref(null)
+const currentQuestion = computed(() => questionList.value[questionIndex.value] || null)
 
-// question precisa existir no template; começa vazio
-const question = reactive({ id: null, title: '', options: [] })
-const selectedOption = ref(null)
+/* ---------- Labels ---------- */
+const labelSimulado = computed(() => config.simuladoLabel || '—')
+const labelMateria = computed(() => config.materiaLabel || '—')
+const labelAno = computed(() => config.ano || '—')
 
-function setQuestion(q) {
-  question.id = q?.id ?? null
-  question.title = q?.title ?? ''
-  question.options = Array.isArray(q?.options) ? q.options : []
-  selectedOption.value = null
-}
-
-async function startChallenge() {
-  loading.value = true; error.value = null
-  try {
-    const res = await apiStartChallenge({
-      simulado: config.simulado,
-      categoria: config.categoria,
-      dificuldade: config.dificuldade,
-      ano: config.ano
-    })
-    challengeId.value = res.challengeId
-    finished.value = !res.question
-    setQuestion(res.question)
-  } catch (e) {
-    error.value = e.message || 'Falha ao iniciar desafio'
-    setQuestion(null)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function startNewQuestion() {
-  // agora busca a próxima questão (não navega)
-  if (!challengeId.value) return
-  loading.value = true; error.value = null
-  try {
-    const res = await apiNextQuestion(challengeId.value)
-    if (res.finished) {
-      finished.value = true
-      setQuestion(null)
-    } else {
-      setQuestion(res.question)
-    }
-  } catch (e) {
-    error.value = e.message || 'Falha ao buscar próxima questão'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function confirmAnswer() {
-  if (!challengeId.value || !question.id || !selectedOption.value) return
-  loading.value = true; error.value = null
-  try {
-    await apiSubmitAnswer({
-      challengeId: challengeId.value,
-      questionId: question.id,
-      answer: selectedOption.value
-    })
-    await startNewQuestion()
-  } catch (e) {
-    error.value = e.message || 'Falha ao enviar resposta'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function skipQuestion() {
-  if (!challengeId.value || !question.id) return
-  loading.value = true; error.value = null
-  try {
-    await apiSkipQuestion({
-      challengeId: challengeId.value,
-      questionId: question.id
-    })
-    await startNewQuestion()
-  } catch (e) {
-    error.value = e.message || 'Falha ao pular questão'
-  } finally {
-    loading.value = false
-  }
-}
-
-/* ---------- Timers ---------- */
-// Countdown (questão) — inicia no "Iniciar"
+/* ---------- Timer ---------- */
 const COUNTDOWN_START = 3 * 60
 const secondsLeft = ref(COUNTDOWN_START)
-
-// Count-up (Resumo) — inicia no "Iniciar"
 const elapsedSeconds = ref(0)
-
 let countdownTick = null
 let elapsedTick = null
 
-onBeforeUnmount(() => stopAllTimers())
-
-/* ---- RESUMO (count-up) ---- */
-const resumoParado = ref(true)
-function iniciarResumo() {
-  if (elapsedTick) { clearInterval(elapsedTick); elapsedTick = null }
-  elapsedTick = setInterval(() => { elapsedSeconds.value += 1 }, 1000)
-  resumoParado.value = false
-}
-function pararResumo() {
-  if (elapsedTick) { clearInterval(elapsedTick); elapsedTick = null }
-  resumoParado.value = true
-}
-function resetResumo() { pararResumo(); elapsedSeconds.value = 0 }
-
-/* ---- COUNTDOWN (questão) ---- */
-function iniciarCountdown() {
-  if (countdownTick) { clearInterval(countdownTick); countdownTick = null }
-  countdownTick = setInterval(() => {
-    if (secondsLeft.value > 0) {
-      secondsLeft.value -= 1
-      if (secondsLeft.value <= 0) {
-        secondsLeft.value = 0
-        clearInterval(countdownTick)
-        countdownTick = null
-      }
-    }
-  }, 1000)
-}
-function pararCountdown() { if (countdownTick) { clearInterval(countdownTick); countdownTick = null } }
-function resetCountdown() { pararCountdown(); secondsLeft.value = COUNTDOWN_START }
-
-/* ---- Utils ---- */
-function stopAllTimers() { pararCountdown(); pararResumo() }
-function formatMMSS(t){ const m = Math.floor(t/60).toString().padStart(2,'0'); const s=(t%60).toString().padStart(2,'0'); return `${m}:${s}` }
+function formatMMSS(t){ const m=Math.floor(t/60).toString().padStart(2,'0'); const s=(t%60).toString().padStart(2,'0'); return `${m}:${s}` }
 function formatHHMMSS(t){ const h=Math.floor(t/3600).toString().padStart(2,'0'); const m=Math.floor((t%3600)/60).toString().padStart(2,'0'); const s=(t%60).toString().padStart(2,'0'); return `${h}:${m}:${s}` }
+const timeDownMMSS = computed(() => formatMMSS(secondsLeft.value))
+const timeUpHHMMSS = computed(() => formatHHMMSS(elapsedSeconds.value))
+const timerColor = computed(() => secondsLeft.value <= 50 ? '#ef4444' : secondsLeft.value <= 110 ? '#f59e0b' : '#22c55e')
 
-const timeDownMMSS  = computed(() => formatMMSS(secondsLeft.value))       // countdown (MM:SS)
-const timeUpHHMMSS  = computed(() => formatHHMMSS(elapsedSeconds.value))  // count-up (HH:MM:SS)
+function iniciarTimers(){
+  pararTimers()
+  secondsLeft.value = COUNTDOWN_START
+  elapsedSeconds.value = 0
+  countdownTick = setInterval(() => {
+    if (secondsLeft.value > 0) secondsLeft.value--
+  }, 1000)
+  elapsedTick = setInterval(() => elapsedSeconds.value++, 1000)
+}
+function pararTimers(){
+  if (countdownTick) clearInterval(countdownTick)
+  if (elapsedTick) clearInterval(elapsedTick)
+}
+onBeforeUnmount(pararTimers)
 
-const timerColor = computed(() => {
-  if (secondsLeft.value <= 50) return '#ef4444'
-  if (secondsLeft.value <= 110) return '#f59e0b'
-  return '#22c55e'
-})
+/* ---------- Ações ---------- */
+function openConfig() { showModal.value = true }
 
-/* ---------- Ações (antigas rotas removidas) ---------- */
-// startNewQuestion(), confirmAnswer() e skipQuestion() já integram com a API
+async function applyConfig(payload) {
+  Object.assign(config, payload)
+  isConfigured.value = true
+  finished.value = false
+  showModal.value = false
 
-/* Rodapé: para apenas o cronômetro do RESUMO */
-function finalizarResumo() { pararResumo() }
+  // define ano do simulado
+  const sim = simulados.value.find(s => s.cod_simulado === config.simulado)
+  config.ano = sim ? new Date(sim.dt_criacao).getFullYear() : new Date().getFullYear()
 
-/* ---------- Logout ---------- */
-async function onLogout() {
+  await carregarQuestoes()
+  iniciarTimers()
+}
+
+/* ---------- Backend ---------- */
+async function carregarQuestoes() {
+  if (!config.simulado) return
+  loading.value = true
   try {
-    await doLogout()
+    const res = await listarQuestoesSimulado(config.simulado)
+    questionList.value = res || []
+    questionIndex.value = 0
+    selectedOption.value = null
   } finally {
-    stopAllTimers()
-    router.replace({ name: 'Login', query: { logout: '1' } })
+    loading.value = false
   }
 }
 
-// Fecha o menu mobile ao navegar entre rotas
-watch(() => route.fullPath, () => {
-  sidebarOpen.value = false
-})
+function confirmAnswer() {
+  if (!currentQuestion.value || !selectedOption.value) return
+  currentQuestion.value.userAnswer = selectedOption.value
+  nextQuestion()
+}
+
+function skipQuestion() {
+  if (!currentQuestion.value) return
+  currentQuestion.value.userAnswer = null
+  nextQuestion()
+}
+
+function nextQuestion() {
+  selectedOption.value = null
+  if (questionIndex.value + 1 < questionList.value.length) {
+    questionIndex.value++
+  } else {
+    finalizarSimulado()
+  }
+}
+
+/* ---------- Finalizar ---------- */
+async function finalizarSimulado() {
+  pararTimers()
+  finished.value = true
+  const acertos = questionList.value.filter(q => q.userAnswer === q.resposta_correta).length
+  const erros = questionList.value.length - acertos
+  // TODO: Quando getUsuario estiver pronto, substituir por o usuário logado
+  await registrarResultadoSimulado(config.simulado, {
+    cod_usuario: 1,
+    qtd_acertos: acertos,
+    qtd_erros: erros
+  })
+  alert(`Simulado finalizado!\nAcertos: ${acertos}\nErros: ${erros}`)
+}
+
+/* ---------- Logout ---------- */
+async function onLogout() {
+  try { await doLogout() }
+  finally { pararTimers(); router.replace({ name: 'Login', query: { logout: '1' } }) }
+}
+
+watch(() => route.fullPath, () => sidebarOpen.value = false)
+listarSimulados().then(data => simulados.value = data)
 </script>
 
 <style scoped>
