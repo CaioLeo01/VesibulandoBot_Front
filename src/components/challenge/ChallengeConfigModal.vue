@@ -12,9 +12,9 @@
         <section class="modal-body">
           <!-- Tipo de simulado -->
           <div class="field">
-            <label for="m-simulado">Tipo de simulado</label>
+            <label for="m-simulado">Simulado</label>
             <select id="m-simulado" v-model="local.simulado">
-              <option v-for="opt in simulados" :key="opt.value" :value="opt.value">
+              <option v-for="opt in simuladosFiltrados" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
             </select>
@@ -22,14 +22,14 @@
 
           <!-- Matéria -->
           <div class="field">
-            <label>Matéria</label>
+            <label>Filtrar por matéria</label>
             <div class="pills">
               <button
-                v-for="cat in categorias"
+                v-for="cat in categoriasBase"
                 :key="cat.value"
                 class="pill"
-                :class="{ active: local.categoria === cat.value }"
-                @click="local.categoria = cat.value"
+                :class="{ active: local.materia === cat.value }"
+                @click="local.materia = cat.value"
                 type="button"
               >
                 {{ cat.label }}
@@ -49,78 +49,85 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch } from 'vue'
+import { reactive, computed, watch, onMounted } from 'vue'
+import { listarSimulados } from '@/services/simulado.js' // ajuste o caminho conforme seu projeto
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   initial: {
     type: Object,
     default: () => ({
-      simulado: 'enem-mix',
-      categoria: 'todas'
+      simulado: null,
+      categoria: null,
+      materia: null
     })
-  },
-  simulados: { type: Array, required: true }
+  }
 })
 const emit = defineEmits(['update:modelValue', 'apply'])
 
-/** ---------- Categorias ---------- */
-const categoriasBase = [
-  { label: 'Todas as matérias', value: 'todas' },
-  { label: 'Matemática', value: 'matematica' },
-  { label: 'Linguagens', value: 'linguagens' },
-  { label: 'Ciências da Natureza', value: 'natureza' },
-  { label: 'Ciências Humanas', value: 'humanas' }
-]
-const categoriasMap = {
-  'enem-mix': categoriasBase,
-  'enem-2022': [
-    { label: 'Todas os Blocos', value: 'todas' },
-    { label: 'Bloco 1 (Linguagens e Humanas)', value: '1dia' },
-    { label: 'Bloco 2 (Natureza e Matemática)', value: '2dia' }
-  ],
-  default: categoriasBase
-}
-
 /* Estado local */
 const local = reactive({
-  simulado: props.initial.simulado,
-  categoria: props.initial.categoria
+  simulado: null,
+  categoria: null,
+  materia: null,
+  simulados: [] // lista carregada do backend
 })
 
-/* Computed */
-const categorias = computed(() => categoriasMap[local.simulado] || categoriasMap.default || [])
-
-/* Helpers */
-function ensureCategoriaValida() {
-  if (!categorias.value.find(c => c.value === local.categoria)) {
-    local.categoria = categorias.value[0].value
+/* ---------- Listar simulados ---------- */
+async function carregarSimulados() {
+  try {
+    const res = await listarSimulados()
+    // exemplo: [{ cod_simulado, titulo, cod_materia }]
+    local.simulados = res.map(s => ({
+      value: s.cod_simulado,
+      label: s.titulo,
+      cod_materia: s.cod_materia
+    }))
+  } catch (e) {
+    console.error('Erro ao listar simulados:', e)
   }
 }
-function resetFromInitial() {
-  Object.assign(local, props.initial || {})
-  ensureCategoriaValida()
-}
 
-/* Watches */
-watch(() => props.modelValue, (open) => { if (open) resetFromInitial() })
-watch(() => props.initial, () => resetFromInitial(), { deep: true })
-watch(() => local.simulado, ensureCategoriaValida)
+/* ---------- Filtragem por matéria ---------- */
+const simuladosFiltrados = computed(() => {
+  if (!local.materia) return local.simulados
+  return local.simulados.filter(s => s.cod_materia === local.materia)
+})
+
+/* ---------- Categorias (mantém seu mapeamento anterior, se necessário) ---------- */
+const categoriasBase = [
+  { label: 'Todas as matérias', value: null },
+  { label: 'Matemática', value: 1 },
+  { label: 'Linguagens', value: 2 },
+  { label: 'Ciências da Natureza', value: 3 },
+  { label: 'Ciências Humanas', value: 4 }
+]
 
 /* Ações */
 function close() { emit('update:modelValue', false) }
 function apply() {
-  const simuladoLabel = (props.simulados || []).find(s => s.value === local.simulado)?.label || ''
-  const categoriaLabel = categorias.value.find(c => c.value === local.categoria)?.label || ''
-
+  const simuladoSel = local.simulados.find(s => s.value === local.simulado)
+  const materiaSel = categoriasBase.find(c => c.value === local.materia)
   emit('apply', {
-    ...local,
-    simuladoLabel,
-    categoriaLabel
+    simulado: local.simulado,
+    materia: local.materia,
+    simuladoLabel: simuladoSel?.label || '',
+    materiaLabel: materiaSel?.label || ''
   })
   close()
 }
+
+/* Lifecycle */
+onMounted(() => carregarSimulados())
+
+watch(() => props.modelValue, open => {
+  if (open) {
+    Object.assign(local, props.initial || {})
+    carregarSimulados()
+  }
+})
 </script>
+
 <style scoped>
 /* ===== Paleta ===== */
 :root, :host{
