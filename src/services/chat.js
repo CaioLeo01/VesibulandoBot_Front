@@ -1,14 +1,18 @@
-export function sendMessageToBot(text) {
-  return new Promise((resolve) => {
-    const replies = [
-      `Ótima pergunta! Vamos explorar: "${text}".`,
-      `Entendi. Sobre "${text}", aqui vai um resumo...`,
-      `Aqui está uma dica rápida sobre "${text}".`,
-      `Legal! Para "${text}", considere começar por...`,
-    ]
-    const pick = replies[Math.floor(Math.random() * replies.length)]
-    setTimeout(() => {
-      resolve(pick)
-    }, 600)
-  })
+﻿﻿export async function sendMessageToBot(message) {
+  try {
+    const res = await fetch("/api/v1/chat/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+
+    const data = await res.json();
+    console.log("Resposta do backend:", data);
+    if (!data || !data.message) throw new Error("Resposta invalida do servidor");
+
+    return data.message;
+  } catch (err) {
+    console.error("Erro no sendMessageToBot:", err);
+    throw err;
+  }
 }
