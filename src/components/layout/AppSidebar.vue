@@ -5,11 +5,13 @@
       <div class="title">VestibulandoBot</div>
     </div>
 
-    <div class="user">
+    <div class="user" @click="goToProfile" title="Ver perfil" style="cursor: pointer;">
       <div class="avatar">{{ initials }}</div>
       <div class="name">{{ displayName || 'Usuário' }}</div>
       <div class="email">{{ user?.email }}</div>
     </div>
+
+
 
     <nav class="nav">
       <RouterLink class="link" :to="{ name: 'Study' }">Modo Estudo</RouterLink>
@@ -86,6 +88,16 @@ const initials = computed(() => {
   return 'VB'
 })
 
+function onNavigate() {
+  emit('navigate')
+}
+
+function goToProfile() {
+  onNavigate()
+  router.push({ name: 'Profile' })
+}
+
+
 async function onLogout() {
   if (logoutLoading.value) return
   logoutLoading.value = true
@@ -143,6 +155,12 @@ async function onLogout() {
   place-items: center;
   font-weight: 800;
   margin: 0 auto;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 10px rgba(7, 150, 133, 0.3);
 }
 .name { font-weight: 700; }
 .email { font-size: 12px; color: #6b7280; }
