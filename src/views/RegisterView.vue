@@ -38,6 +38,7 @@
         </form>
       </div>
     </div>
+    <SiteFooter />
   </div>
 </template>
 
@@ -45,6 +46,7 @@
 import { ref, computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import SiteHeader from '../components/layout/SiteHeader.vue'
+import SiteFooter from '../components/layout/SiteFooter.vue'
 import { register as apiRegister } from '@/services/auth'
 import googleLogo from '../assets/google.png'
 
@@ -104,11 +106,12 @@ function loginWithGoogle() {
   const base     = `${protocol}://${host}:${port}${prefix}`
   window.location.href = `${base}/auth/google/login`
 }
+
 </script>
 
 <style scoped>
-.auth { min-height: 100vh; background: #0e3358; color: #fff; }
-.center { min-height: calc(100vh - 60px); display: grid; place-items: center; padding: 20px; }
+.auth { min-height: 100vh; background: #0e3358; color: #fff; display: flex; flex-direction: column; }
+.center { flex: 1 0 auto; display: grid; place-items: center; padding: 20px; }
 .card {
   background: #fff; color: #111;
   border-radius: 12px; padding: 22px; width: 100%; max-width: 420px;

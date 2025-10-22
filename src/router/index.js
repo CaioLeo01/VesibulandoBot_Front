@@ -26,6 +26,7 @@ const routes = [
   { path: '/admin', name: 'Admin', component: AdminView, meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
 
+  { path: '/admin/configurar-simulado', name: 'ConfigurarSimulado', component: ConfigurarSimuladoView, meta: { requiresAuth: true } },
 
   // criar senha após login com Google
   { 
@@ -55,6 +56,11 @@ router.beforeEach(async (to) => {
   // 2) bloqueia acesso a rotas protegidas se não logado
   if (requiresAuth && !user) {
     return { name: 'Login', query: { r: to.fullPath } }
+  }
+
+  // Permitir Login/Register após fluxo de logout explícito
+  if ((to.name === 'Login' || to.name === 'Register') && to.query && to.query.logout === '1') {
+    return true
   }
 
   // 3) já logado não deve ver Login/Register

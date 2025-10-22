@@ -1,6 +1,6 @@
 <template>
   <aside class="quick">
-    <h3>Perguntas rápidas</h3>
+    <h3>Perguntas rapidas</h3>
     <div class="list">
       <button
         v-for="(q, i) in questions"
@@ -16,11 +16,11 @@
 
 <script setup>
 const questions = [
-  'Explique fotossíntese em 3 passos.',
-  'Como calcular a média ponderada?',
-  'Qual a diferença entre mitose e meiose?',
-  'Dicas para redação nota 1000.',
-  'Resumo da Revolução Francesa.',
+  'Explique fotossintese em 3 passos.',
+  'Como calcular a media ponderada?',
+  'Qual a diferenca entre mitose e meiose?',
+  'Dicas para redacao nota 1000.',
+  'Resumo da Revolucao Francesa.',
   'Como converter km/h para m/s?'
 ]
 </script>
@@ -51,7 +51,23 @@ h3 { margin: 0 0 12px; }
   padding: 10px 12px;
   cursor: pointer;
   transition: background .2s, transform .02s;
+  font-weight: 600;
 }
-.item:hover { background: #079685; }
+.item:hover { background: #079685; color: #fff; }
 .item:active { transform: translateY(1px); }
+
+@media (max-width: 900px) {
+  .quick {
+    height: auto;
+    overflow: visible;
+  }
+
+  .list {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .item {
+    font-size: 14px;
+  }
+}
 </style>

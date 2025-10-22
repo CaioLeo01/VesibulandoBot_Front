@@ -26,7 +26,7 @@ export async function register({ email, password, confirm, name }) {
     throw new Error('As senhas não conferem.')
   }
 
-  const body = { email, senha: password }
+  const body = { email, senha: password }  // Backend ainda usa 'senha'
   if (name) body.nome = name
 
   return apiFetch('/auth/register', {
@@ -38,7 +38,7 @@ export async function register({ email, password, confirm, name }) {
 export async function login({ email, password }) {
   const u = await apiFetch('/auth/login', {
     method: 'POST',
-    body: { email, senha: password },
+    body: { email, senha: password },  // Backend ainda usa 'senha'
   })
   _user = u
   _sessionLoaded = true
@@ -51,9 +51,13 @@ export async function logout() {
   _sessionLoaded = false
 }
 
-export async function setPassword({ password, confirm }) {
+export async function setPassword({ password, confirm, currentPassword }) {
   return apiFetch('/auth/password/set', {
     method: 'POST',
-    body: { senha: password, confirmacao: confirm },
+    body: { 
+      password,           // ✅ Mudança: usar 'password'
+      confirm,            // ✅ Mudança: usar 'confirm'
+      current_password: currentPassword  // ✅ Se precisar da senha atual
+    },
   })
 }

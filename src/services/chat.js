@@ -1,18 +1,15 @@
-﻿﻿export async function sendMessageToBot(message) {
-  try {
-    const res = await fetch("/api/v1/chat/message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
+﻿import { apiFetch } from './api.js'
 
-    const data = await res.json();
-    console.log("Resposta do backend:", data);
-    if (!data || !data.message) throw new Error("Resposta invalida do servidor");
+export async function sendMessageToBot(text) {
+  const payload = await apiFetch('/chat/perguntar', {
+    method: 'POST',
+    body: { pergunta: text },
+  })
 
-    return data.message;
-  } catch (err) {
-    console.error("Erro no sendMessageToBot:", err);
-    throw err;
+  const reply = payload?.resposta
+  if (typeof reply !== 'string' || !reply.trim()) {
+    throw new Error('Resposta invalida do servidor.')
   }
+
+  return reply
 }

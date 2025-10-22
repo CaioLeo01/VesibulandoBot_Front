@@ -79,16 +79,16 @@ input {
   background: #fff;
 }
 input:focus {
-  border-color: #42b983;
+  border-color: #16a34a;
 }
 .error {
   margin: 4px 0 0;
-  color: #d93025;
+  color: #b91c1c;
   font-size: 13px;
 }
 .submit {
   margin-top: 8px;
-  background: #00a37f;
+  background: #16a34a;
   color: #fff;
   border: 0;
   border-radius: 8px;
