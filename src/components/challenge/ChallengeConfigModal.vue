@@ -1,47 +1,93 @@
 <template>
   <teleport to="body">
     <div v-if="modelValue" class="overlay" @click.self="close">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cfg-title">
+      <div class="modal" role="dialog" aria-modal="true">
         <!-- Cabeçalho -->
         <header class="modal-header">
-          <h2 id="cfg-title">Configurar Desafio</h2>
+          <h2>Cadastrar Simulado</h2>
           <button class="icon-btn" @click="close" aria-label="Fechar">✕</button>
         </header>
 
         <!-- Corpo -->
         <section class="modal-body">
-          <!-- Tipo de simulado -->
+          <!-- Título -->
           <div class="field">
-            <label for="m-simulado">Tipo de simulado</label>
-            <select id="m-simulado" v-model="local.simulado">
-              <option v-for="opt in simulados" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
+            <label for="titulo">Título</label>
+            <input
+              id="titulo"
+              v-model="local.titulo"
+              placeholder="Ex: Simulado ENEM 2025"
+              class="input"
+            />
           </div>
 
-          <!-- Matéria -->
+          <!-- Descrição -->
           <div class="field">
-            <label>Matéria</label>
-            <div class="pills">
-              <button
-                v-for="cat in categorias"
-                :key="cat.value"
-                class="pill"
-                :class="{ active: local.categoria === cat.value }"
-                @click="local.categoria = cat.value"
-                type="button"
+            <label for="descricao">Descrição</label>
+            <textarea
+              id="descricao"
+              v-model="local.descricao"
+              rows="3"
+              placeholder="Breve descrição..."
+              class="input"
+            ></textarea>
+          </div>
+
+          <!-- Matérias -->
+          <div class="field">
+            <label>Matéria(s)</label>
+            <div class="materias-list">
+              <label
+                v-for="m in materias"
+                :key="m.cod_materia"
+                class="checkbox-line"
               >
-                {{ cat.label }}
-              </button>
+                <input
+                  type="checkbox"
+                  :value="m.cod_materia"
+                  v-model="local.materiasSelecionadas"
+                  @change="carregarQuestoes"
+                />
+                <span>{{ m.nome_materia }}</span>
+              </label>
             </div>
+            <small class="hint">Selecione uma ou mais matérias</small>
+          </div>
+
+          <!-- Questões -->
+          <div v-if="questoesFiltradas.length" class="field">
+            <label>Selecione até 40 questões</label>
+            <div class="questoes-list">
+              <label
+                v-for="q in questoesFiltradas"
+                :key="q.cod_questao"
+                class="checkbox-line"
+              >
+                <input
+                  type="checkbox"
+                  :value="q.cod_questao"
+                  v-model="local.questoesSelecionadas"
+                  :disabled="isLimiteAtingido && !local.questoesSelecionadas.includes(q.cod_questao)"
+                />
+                <span>{{ q.tx_questao }}</span>
+              </label>
+            </div>
+            <p class="hint">
+              {{ local.questoesSelecionadas.length }}/40 selecionadas
+            </p>
           </div>
         </section>
 
         <!-- Rodapé -->
         <footer class="modal-footer">
           <button class="btn btn-ghost" @click="close">Cancelar</button>
-          <button class="btn btn-accent" @click="apply">Iniciar</button>
+          <button
+            class="btn btn-accent"
+            :disabled="!podeSalvar"
+            @click="salvar"
+          >
+            Salvar Simulado
+          </button>
         </footer>
       </div>
     </div>
@@ -49,217 +95,240 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { listarMaterias } from '@/services/materias.js'
+import { listarQuestoesPorMateria } from '@/services/questao.js'
+import { criarSimulado, adicionarQuestaoSimulado } from '@/services/simulado.js'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  initial: {
-    type: Object,
-    default: () => ({
-      simulado: 'enem-mix',
-      categoria: 'todas'
-    })
-  },
-  simulados: { type: Array, required: true }
 })
-const emit = defineEmits(['update:modelValue', 'apply'])
+const emit = defineEmits(['update:modelValue', 'salvo'])
 
-/** ---------- Categorias ---------- */
-const categoriasBase = [
-  { label: 'Todas as matérias', value: 'todas' },
-  { label: 'Matemática', value: 'matematica' },
-  { label: 'Linguagens', value: 'linguagens' },
-  { label: 'Ciências da Natureza', value: 'natureza' },
-  { label: 'Ciências Humanas', value: 'humanas' }
-]
-const categoriasMap = {
-  'enem-mix': categoriasBase,
-  'enem-2022': [
-    { label: 'Todas os Blocos', value: 'todas' },
-    { label: 'Bloco 1 (Linguagens e Humanas)', value: '1dia' },
-    { label: 'Bloco 2 (Natureza e Matemática)', value: '2dia' }
-  ],
-  default: categoriasBase
-}
+const materias = ref([])
+const questoes = ref([])
+const carregando = ref(false)
 
-/* Estado local */
 const local = reactive({
-  simulado: props.initial.simulado,
-  categoria: props.initial.categoria
+  titulo: '',
+  descricao: '',
+  materiasSelecionadas: [],
+  questoesSelecionadas: [],
 })
 
-/* Computed */
-const categorias = computed(() => categoriasMap[local.simulado] || categoriasMap.default || [])
+const questoesFiltradas = computed(() => {
+  if (!local.materiasSelecionadas.length) return []
+  return questoes.value.filter(q =>
+    local.materiasSelecionadas.includes(q.cod_materia)
+  )
+})
 
-/* Helpers */
-function ensureCategoriaValida() {
-  if (!categorias.value.find(c => c.value === local.categoria)) {
-    local.categoria = categorias.value[0].value
+const isLimiteAtingido = computed(() => local.questoesSelecionadas.length >= 40)
+const podeSalvar = computed(() =>
+  local.titulo.trim() &&
+  local.descricao.trim() &&
+  local.materiasSelecionadas.length > 0 &&
+  local.questoesSelecionadas.length > 0 &&
+  local.questoesSelecionadas.length <= 40
+)
+
+/* === Métodos === */
+async function carregarMaterias() {
+  try {
+    carregando.value = true
+    materias.value = await listarMaterias()
+  } catch (e) {
+    console.error('❌ Erro ao carregar matérias:', e)
+  } finally {
+    carregando.value = false
   }
 }
-function resetFromInitial() {
-  Object.assign(local, props.initial || {})
-  ensureCategoriaValida()
+
+async function carregarQuestoes() {
+  try {
+    questoes.value = []
+    for (const cod of local.materiasSelecionadas) {
+      const lista = await listarQuestoesPorMateria(cod)
+      if (Array.isArray(lista)) questoes.value.push(...lista)
+    }
+  } catch (e) {
+    console.error('❌ Erro ao carregar questões:', e)
+  }
 }
 
-/* Watches */
-watch(() => props.modelValue, (open) => { if (open) resetFromInitial() })
-watch(() => props.initial, () => resetFromInitial(), { deep: true })
-watch(() => local.simulado, ensureCategoriaValida)
+async function salvar() {
+  try {
+    carregando.value = true
 
-/* Ações */
-function close() { emit('update:modelValue', false) }
-function apply() {
-  const simuladoLabel = (props.simulados || []).find(s => s.value === local.simulado)?.label || ''
-  const categoriaLabel = categorias.value.find(c => c.value === local.categoria)?.label || ''
+    // 🔹 Envia `cod_materias` (plural) conforme o backend novo
+    const sim = await criarSimulado({
+      titulo: local.titulo,
+      descricao: local.descricao,
+      ativo: true,
+      cod_materias: local.materiasSelecionadas
+    })
 
-  emit('apply', {
-    ...local,
-    simuladoLabel,
-    categoriaLabel
-  })
-  close()
+    const idSimulado = sim?.cod_simulado
+    if (!idSimulado) {
+      alert('Erro ao criar simulado. Verifique o console.')
+      return
+    }
+
+    // 🔹 Adiciona as questões ao simulado
+    for (const cod_questao of local.questoesSelecionadas) {
+      await adicionarQuestaoSimulado(idSimulado, { cod_questao })
+    }
+
+    emit('salvo', sim)
+    close()
+  } catch (e) {
+    console.error('❌ Erro ao salvar simulado:', e)
+    alert('Erro ao salvar simulado. Veja o console para detalhes.')
+  } finally {
+    carregando.value = false
+  }
 }
+
+function close() {
+  emit('update:modelValue', false)
+}
+
+watch(() => props.modelValue, open => {
+  if (open) carregarMaterias()
+  else {
+    Object.assign(local, {
+      titulo: '',
+      descricao: '',
+      materiasSelecionadas: [],
+      questoesSelecionadas: [],
+    })
+    questoes.value = []
+  }
+})
 </script>
+
 <style scoped>
-/* ===== Paleta ===== */
-:root, :host{
-  --c-primary:#1E3A5F;
-  --c-accent:#4ADE80;
-  --c-bg:#F9FAFB;
-  --c-surface:#FFFFFF;
-  --c-text:#1F2937;
-  --glass: rgba(30,58,95,.92);
-  --bd-soft: rgba(255,255,255,.16);
-  --bd-strong: rgba(255,255,255,.26);
-  --shadow: 0 30px 80px rgba(2,6,23,.35);
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 1000;
 }
-
-/* ===== Overlay / Modal ===== */
-.overlay{
-  position:fixed; inset:0; background:rgba(2,6,23,.55);
-  display:grid; place-items:center; padding:24px; z-index:1000;
+.modal {
+  background: #1e3a5f;
+  border: 1px solid #1e3a5f;
+  width: clamp(380px, 95vw, 850px);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
 }
-.modal{
-  background: #1E3A5F !important;
-  border: 1px solid #1E3A5F;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-
-  width: clamp(360px, 92vw, 820px);
-  box-sizing: border-box;
-  border-radius: 24px;
-}
-
-/* ===== Header ===== */
-.modal-header{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:20px 24px;
-  border-bottom:1px solid var(--bd-soft);
-}
-.modal-header h2{
-  margin:0; font-size:28px; font-weight:800; letter-spacing:.2px; color:#fcfcfc;
-}
-.icon-btn{
-  background:transparent; color:#ffffff; border:1px solid var(--bd-soft);
-  width:36px; height:36px; border-radius:8px; cursor:pointer;
-}
-.icon-btn:hover{ background:rgba(255,255,255,.06); }
-
-/* ===== Body ===== */
-.modal-body{ padding:20px 24px; display:grid; gap:18px; }
-.field{ display:grid; gap:10px; }
-.field label{ color:#ffffff; font-size:14px; }
-
-/* Select escuro */
-select{
-  appearance:none; width:100%;
-  padding:12px 14px; border-radius:12px;
-  border:1px solid var(--bd-strong);
-  color:#F6FAFF; font-size:14px; outline:none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, #CFE0FF 50%),
-    linear-gradient(135deg, #CFE0FF 50%, transparent 50%);
-  background-position: calc(100% - 18px) calc(1em + 2px),
-                      calc(100% - 13px) calc(1em + 2px);
-  background-size: 6px 6px, 6px 6px; background-repeat:no-repeat;
-}
-
-/* Pills */
-.pills{ display:flex; flex-wrap:wrap; gap:10px; }
-.pill{
-  background:rgba(255,255,255,.10);
-  border:1px solid var(--bd-strong);
-  color:#E7F0FF;
-  padding:10px 14px;
-  border-radius:999px;
-  font-weight:700; font-size:14px;
-  cursor:pointer;
-}
-.pill:hover{ background:rgba(255,255,255,.16); }
-.pill.active{
-  background:#FFFFFF; color:var(--c-text); border-color:transparent;
-}
-
-/* Ano */
-.year-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.year-arrow{
-  width:40px; height:40px; border-radius:10px; cursor:pointer;
-  background:rgba(255,255,255,.08); color:#E7F0FF; border:1px solid var(--bd-strong);
-  font-size:20px; font-weight:800;
-}
-.year-arrow:disabled{ opacity:.5; cursor:not-allowed; }
-.year-box{
-  min-width:120px; text-align:center;
-  background:#FFFFFF; color:var(--c-text);
-  border-radius:10px; padding:10px 14px; font-weight:800; letter-spacing:.5px;
-}
-
-/* ===== Footer ===== */
-.modal > .modal-footer{
-  display: flex !important;
-  justify-content: flex-end !important;
+.modal-header {
+  display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+.modal-header h2 {
+  color: #fff;
+  font-size: 22px;
+  margin: 0;
+}
+.icon-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+.modal-body {
+  padding: 24px 24px;
+  display: grid;
+  gap: 16px;
+}
+.field {
+  color: #fff;
+  display: grid;
+  gap: 8px;
+}
+.input,
+textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 10px 14px;
+  outline: none;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+textarea {
+  resize: none;
+}
+.hint {
+  color: #cfe8ff;
+  font-size: 12px;
+}
+.materias-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 10px;
+}
+.questoes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px;
+  border-radius: 10px;
+}
+.checkbox-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #fff;
+  font-size: 14px;
+}
+.checkbox-line input[type='checkbox'] {
+  accent-color: #4ade80;
+  transform: scale(1.1);
+  margin-top: 2px;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
   padding: 20px 24px;
-  border-top: 1px solid var(--bd-soft);
-  width: 94%;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
-.btn{
-  border-radius:12px; padding:10px 16px; font-weight:700; font-size:14px; cursor:pointer;
-  border:1px solid var(--bd-strong); background:rgba(255,255,255,.08); color:#E7F0FF;
+.btn {
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
-.btn-ghost{ background:rgba(255,255,255,.08); }
-
-/* Botão Iniciar (verde) */
-.modal-footer .btn-accent{
-  --btn-green: #4ADE80;       /* base */
-  --btn-green-hover: #16A34A; /* hover */
-  background: var(--btn-green);
-  color: #FFFFFF;
-  border: 1px solid var(--btn-green);
-  box-shadow: none;
-  transition: background-color .2s ease, border-color .2s ease, transform .05s ease;
+.btn-accent {
+  background: #4ade80;
+  border: 1px solid #4ade80;
+  color: #fff;
 }
-.modal-footer .btn-accent:hover{
-  background: var(--btn-green-hover);
-  border-color: var(--btn-green-hover);
-}
-.modal-footer .btn-accent:active{ transform: translateY(1px); }
-.modal-footer .btn-accent:focus-visible{
-  outline: 3px solid rgba(74, 222, 128, 0.4);
-  outline-offset: 2px;
-}
-
-/* Select menu visível no tema escuro */
-.modal select{ background:#1E3A5F; color:#FFFFFF; border:1px solid #2A4C70; }
-.modal select:focus{ border-color:#FBBF24; }
-.modal select option,
-.modal select optgroup{
-  background:#1E3A5F !important; color:#FFFFFF !important;
-}
-.modal select option:checked,
-.modal select option:hover{
-  background:#16395B !important; color:#FFFFFF !important;
+.btn-accent:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

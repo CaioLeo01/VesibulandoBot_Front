@@ -1,6 +1,6 @@
 import { apiFetch } from './api.js'
 
-const baseUrl = '/api/v1/questoes'
+const baseUrl = '/questoes'
 
 export async function listarQuestoes() {
     return apiFetch(`${baseUrl}/`, { method: 'GET' })
@@ -26,4 +26,8 @@ export async function atualizarQuestao(cod_questao, dados) {
 
 export async function deletarQuestao(cod_questao) {
     return apiFetch(`${baseUrl}/${cod_questao}`, { method: 'DELETE' })
+}
+
+export async function listarQuestoesPorMateria(cod_materia) {
+    return apiFetch(`${baseUrl}/materia/${cod_materia}`, { method: 'GET' })
 }

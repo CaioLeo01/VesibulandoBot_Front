@@ -1,7 +1,10 @@
 import { apiFetch } from './api.js'
 
-const baseUrl = '/api/v1/simulados'
+const baseUrl = '/simulados'
 
+/* ===========================
+   🔹 SIMULADOS
+=========================== */
 export async function listarSimulados() {
     return apiFetch(`${baseUrl}/`, { method: 'GET' })
 }
@@ -28,6 +31,9 @@ export async function deletarSimulado(cod_simulado) {
     return apiFetch(`${baseUrl}/${cod_simulado}`, { method: 'DELETE' })
 }
 
+/* ===========================
+   🔹 QUESTÕES
+=========================== */
 export async function listarQuestoesSimulado(cod_simulado) {
     return apiFetch(`${baseUrl}/${cod_simulado}/questoes`, { method: 'GET' })
 }
@@ -39,6 +45,9 @@ export async function adicionarQuestaoSimulado(cod_simulado, dados) {
     })
 }
 
+/* ===========================
+   🔹 RESULTADOS
+=========================== */
 export async function listarResultadosSimulado(cod_simulado) {
     return apiFetch(`${baseUrl}/${cod_simulado}/resultados`, { method: 'GET' })
 }
@@ -47,5 +56,18 @@ export async function registrarResultadoSimulado(cod_simulado, dados) {
     return apiFetch(`${baseUrl}/${cod_simulado}/resultados`, {
         method: 'POST',
         body: dados,
+    })
+}
+
+/* ✅ Novo: resultados por usuário */
+export async function listarResultadosPorUsuario(cod_usuario) {
+    return apiFetch(`${baseUrl}/resultados/usuario/${cod_usuario}`, { method: 'GET' })
+}
+
+/* ✅ Novo: vincular matérias ao simulado */
+export async function vincularMateriasAoSimulado(cod_simulado, listaCodMaterias) {
+    return apiFetch(`${baseUrl}/${cod_simulado}/materias`, {
+        method: 'POST',
+        body: { cod_materias: listaCodMaterias },
     })
 }
