@@ -7,6 +7,8 @@ import StudyView from '../views/StudyView.vue'
 import ChallengeView from '../views/ChallengeView.vue'
 import PerformanceView from '../views/PerformanceView.vue'
 import AdminView from '../views/AdminView.vue'
+import ProfileView from '../views/ProfileView.vue'
+
 
 
 import { getCurrentUser } from '@/services/auth'
@@ -22,6 +24,9 @@ const routes = [
   { path: '/challenge', name: 'Challenge', component: ChallengeView, meta: { requiresAuth: true } },
   { path: '/performance', name: 'Performance', component: PerformanceView, meta: { requiresAuth: true } },
   { path: '/admin', name: 'Admin', component: AdminView, meta: { requiresAuth: true } },
+  { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
+
+  { path: '/admin/configurar-simulado', name: 'ConfigurarSimulado', component: ConfigurarSimuladoView, meta: { requiresAuth: true } },
 
   // criar senha após login com Google
   { 

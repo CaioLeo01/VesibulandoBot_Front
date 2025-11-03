@@ -1,5 +1,3 @@
-// import './assets/main.css'
-
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
@@ -19,6 +17,14 @@ const toastOptions = {
 }
 
 app.use(router)
-app.use(Toast, toastOptions)
+app.use(Toast, {
+  position: 'top-right',
+  timeout: 3000,
+  closeOnClick: true,
+  pauseOnHover: true,
+  draggable: true,
+  showCloseButtonOnHover: false,
+  hideProgressBar: false
+})
 
 app.mount('#app')

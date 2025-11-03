@@ -1,4 +1,5 @@
 <template>
+<template>
   <div class="challenge">
     <!-- Top bar -->
     <header class="challenge-top">

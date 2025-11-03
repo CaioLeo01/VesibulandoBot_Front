@@ -281,6 +281,10 @@ async function carregarAlunosDoProfessor() {
   }
 }
 
+function goConfigurarSimulado() {
+  router.push({ name: 'ConfigurarSimulado' })
+}
+
 function applyChallengeConfig(payload) {
   console.log('Configuração aplicada:', payload)
   showChallengeConfigModal.value = false
