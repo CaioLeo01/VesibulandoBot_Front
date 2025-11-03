@@ -10,30 +10,40 @@
 
         <!-- Corpo -->
         <section class="modal-body">
-          <!-- Tipo de simulado -->
-          <div class="field">
-            <label for="m-simulado">Tipo de simulado</label>
-            <select id="m-simulado" v-model="local.simulado">
-              <option v-for="opt in simulados" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-          </div>
+          <div class="field-row">
+            <!-- Filtro: Simulado -->
+            <div class="field">
+              <label for="sel-sim">Simulado</label>
+              <select id="sel-sim" v-model="filtroSimulado" class="select">
+                <option :value="null">Todos os simulados</option>
+                <option
+                  v-for="s in simuladosOptions"
+                  :key="s.value"
+                  :value="s.value"
+                >
+                  {{ s.label }}
+                </option>
+              </select>
+            </div>
 
-          <!-- Matéria -->
-          <div class="field">
-            <label>Matéria</label>
-            <div class="pills">
-              <button
-                v-for="cat in categorias"
-                :key="cat.value"
-                class="pill"
-                :class="{ active: local.categoria === cat.value }"
-                @click="local.categoria = cat.value"
-                type="button"
+            <!-- Filtro: Matéria -->
+            <div class="field">
+              <label for="sel-mat">Matéria</label>
+              <select
+                id="sel-mat"
+                v-model="filtroMateria"
+                class="select"
+                :disabled="materiasOptions.length === 0"
               >
-                {{ cat.label }}
-              </button>
+                <option :value="null">Todas as matérias</option>
+                <option
+                  v-for="m in materiasOptions"
+                  :key="m.value"
+                  :value="m.value"
+                >
+                  {{ m.label }}
+                </option>
+              </select>
             </div>
           </div>
         </section>
@@ -49,90 +59,121 @@
 </template>
 
 <script setup>
-import { reactive, computed, watch } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
+import { listarSimulados } from '@/services/simulado.js'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
+  simulados: { type: Array, default: () => [] },
   initial: {
     type: Object,
-    default: () => ({
-      simulado: 'enem-mix',
-      categoria: 'todas'
-    })
-  },
-  simulados: { type: Array, required: true }
+    default: () => ({ cod_simulado: null, cod_materia: null })
+  }
 })
 const emit = defineEmits(['update:modelValue', 'apply'])
 
-/** ---------- Categorias ---------- */
-const categoriasBase = [
-  { label: 'Todas as matérias', value: 'todas' },
-  { label: 'Matemática', value: 'matematica' },
-  { label: 'Linguagens', value: 'linguagens' },
-  { label: 'Ciências da Natureza', value: 'natureza' },
-  { label: 'Ciências Humanas', value: 'humanas' }
-]
-const categoriasMap = {
-  'enem-mix': categoriasBase,
-  'enem-2022': [
-    { label: 'Todas os Blocos', value: 'todas' },
-    { label: 'Bloco 1 (Linguagens e Humanas)', value: '1dia' },
-    { label: 'Bloco 2 (Natureza e Matemática)', value: '2dia' }
-  ],
-  default: categoriasBase
-}
+const simuladosRaw = ref([])
+const simuladosOptions = ref([])
+const materiasOptions = ref([])
 
-/* Estado local */
-const local = reactive({
-  simulado: props.initial.simulado,
-  categoria: props.initial.categoria
+const filtroSimulado = ref(null)
+const filtroMateria  = ref(null)
+
+const simuladoById = computed(() => {
+  const map = new Map()
+  for (const s of simuladosRaw.value) map.set(s.cod_simulado, s)
+  return map
 })
 
-/* Computed */
-const categorias = computed(() => categoriasMap[local.simulado] || categoriasMap.default || [])
-
-/* Helpers */
-function ensureCategoriaValida() {
-  if (!categorias.value.find(c => c.value === local.categoria)) {
-    local.categoria = categorias.value[0].value
-  }
+function close() {
+  emit('update:modelValue', false)
 }
-function resetFromInitial() {
-  Object.assign(local, props.initial || {})
-  ensureCategoriaValida()
-}
-
-/* Watches */
-watch(() => props.modelValue, (open) => { if (open) resetFromInitial() })
-watch(() => props.initial, () => resetFromInitial(), { deep: true })
-watch(() => local.simulado, ensureCategoriaValida)
-
-/* Ações */
-function close() { emit('update:modelValue', false) }
 function apply() {
-  const simuladoLabel = (props.simulados || []).find(s => s.value === local.simulado)?.label || ''
-  const categoriaLabel = categorias.value.find(c => c.value === local.categoria)?.label || ''
-
   emit('apply', {
-    ...local,
-    simuladoLabel,
-    categoriaLabel
+    cod_simulado: filtroSimulado.value ?? null,
+    cod_materia:  filtroMateria.value  ?? null
   })
   close()
 }
+function rebuildMateriasOptions() {
+  if (filtroSimulado.value != null) {
+    const s = simuladoById.value.get(filtroSimulado.value)
+    const cods  = s?.cod_materias ?? []
+    const nomes = s?.nomes_materias ?? []
+    materiasOptions.value = cods.map((id, i) => ({ value: id, label: nomes[i] ?? `Matéria ${id}` }))
+    return
+  }
+  
+  const seen = new Set()
+  const out = []
+  for (const s of simuladosRaw.value) {
+    const cods  = s.cod_materias ?? []
+    const nomes = s.nomes_materias ?? []
+    cods.forEach((id, i) => {
+      if (!seen.has(id)) {
+        seen.add(id)
+        out.push({ value: id, label: nomes[i] ?? `Matéria ${id}` })
+      }
+    })
+  }
+  materiasOptions.value = out
+}
+
+watch(() => props.modelValue, (open) => {
+  if (open) {
+    filtroSimulado.value = props.initial?.cod_simulado ?? null
+    filtroMateria.value  = props.initial?.cod_materia  ?? null
+    rebuildMateriasOptions()
+  }
+})
+watch(filtroSimulado, () => {
+  filtroMateria.value = null
+  rebuildMateriasOptions()
+})
+
+onMounted(async () => {
+  if (props.simulados?.length) {
+    simuladosRaw.value = props.simulados
+  } else {
+    try {
+      simuladosRaw.value = await listarSimulados() || []
+    } catch {
+      simuladosRaw.value = []
+    }
+  }
+
+  simuladosOptions.value = simuladosRaw.value.map(s => ({
+    value: s.cod_simulado,
+    label: s.titulo
+  }))
+
+  rebuildMateriasOptions()
+
+  if (props.modelValue) {
+    filtroSimulado.value = props.initial?.cod_simulado ?? null
+    filtroMateria.value  = props.initial?.cod_materia  ?? null
+  }
+})
+
+watch(() => props.simulados, (novo) => {
+  if (!Array.isArray(novo)) return
+  simuladosRaw.value = novo
+  simuladosOptions.value = novo.map(s => ({
+    value: s.cod_simulado,
+    label: s.titulo
+  }))
+  rebuildMateriasOptions()
+}, { immediate: false })
 </script>
+
 <style scoped>
 /* ===== Paleta ===== */
 :root, :host{
   --c-primary:#1E3A5F;
   --c-accent:#4ADE80;
-  --c-bg:#F9FAFB;
-  --c-surface:#FFFFFF;
-  --c-text:#1F2937;
-  --glass: rgba(30,58,95,.92);
+  --c-text:#F8FAFC;
   --bd-soft: rgba(255,255,255,.16);
   --bd-strong: rgba(255,255,255,.26);
-  --shadow: 0 30px 80px rgba(2,6,23,.35);
 }
 
 /* ===== Overlay / Modal ===== */
@@ -141,125 +182,57 @@ function apply() {
   display:grid; place-items:center; padding:24px; z-index:1000;
 }
 .modal{
-  background: #1E3A5F !important;
-  border: 1px solid #1E3A5F;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-
-  width: clamp(360px, 92vw, 820px);
-  box-sizing: border-box;
-  border-radius: 24px;
+  background:#1E3A5F;
+  border:1px solid #1E3A5F;
+  width:clamp(360px, 92vw, 720px);
+  border-radius:24px;
+  box-sizing:border-box;
 }
 
 /* ===== Header ===== */
 .modal-header{
   display:flex; align-items:center; justify-content:space-between;
-  padding:20px 24px;
-  border-bottom:1px solid var(--bd-soft);
+  padding:20px 24px; border-bottom:1px solid var(--bd-soft);
 }
 .modal-header h2{
-  margin:0; font-size:28px; font-weight:800; letter-spacing:.2px; color:#fcfcfc;
+  margin:0; font-size:22px; font-weight:800; letter-spacing:.2px; color:#ffffff;
 }
 .icon-btn{
   background:transparent; color:#ffffff; border:1px solid var(--bd-soft);
   width:36px; height:36px; border-radius:8px; cursor:pointer;
 }
-.icon-btn:hover{ background:rgba(255,255,255,.06); }
+.icon-btn:hover{ background:rgba(255,255,255,.08); }
 
 /* ===== Body ===== */
 .modal-body{ padding:20px 24px; display:grid; gap:18px; }
-.field{ display:grid; gap:10px; }
-.field label{ color:#ffffff; font-size:14px; }
+.field-row{ display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+.field{ display:flex; flex-direction:column; gap:8px; min-width:240px; flex:1; }
+.field label{ color:#ffffff; font-size:14px; font-weight:600; }
 
-/* Select escuro */
-select{
-  appearance:none; width:100%;
-  padding:12px 14px; border-radius:12px;
-  border:1px solid var(--bd-strong);
-  color:#F6FAFF; font-size:14px; outline:none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, #CFE0FF 50%),
-    linear-gradient(135deg, #CFE0FF 50%, transparent 50%);
-  background-position: calc(100% - 18px) calc(1em + 2px),
-                      calc(100% - 13px) calc(1em + 2px);
-  background-size: 6px 6px, 6px 6px; background-repeat:no-repeat;
+.select{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid #2A4C70;
+  background:#16304A;
+  color:#ffffff;
+  font-size:14px;
+  outline:none;
 }
-
-/* Pills */
-.pills{ display:flex; flex-wrap:wrap; gap:10px; }
-.pill{
-  background:rgba(255,255,255,.10);
-  border:1px solid var(--bd-strong);
-  color:#E7F0FF;
-  padding:10px 14px;
-  border-radius:999px;
-  font-weight:700; font-size:14px;
-  cursor:pointer;
-}
-.pill:hover{ background:rgba(255,255,255,.16); }
-.pill.active{
-  background:#FFFFFF; color:var(--c-text); border-color:transparent;
-}
-
-/* Ano */
-.year-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.year-arrow{
-  width:40px; height:40px; border-radius:10px; cursor:pointer;
-  background:rgba(255,255,255,.08); color:#E7F0FF; border:1px solid var(--bd-strong);
-  font-size:20px; font-weight:800;
-}
-.year-arrow:disabled{ opacity:.5; cursor:not-allowed; }
-.year-box{
-  min-width:120px; text-align:center;
-  background:#FFFFFF; color:var(--c-text);
-  border-radius:10px; padding:10px 14px; font-weight:800; letter-spacing:.5px;
-}
+.select:disabled{ opacity:.6; cursor:not-allowed; }
 
 /* ===== Footer ===== */
-.modal > .modal-footer{
-  display: flex !important;
-  justify-content: flex-end !important;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid var(--bd-soft);
-  width: 94%;
+.modal-footer{
+  display:flex; justify-content:flex-end; align-items:center; gap:12px;
+  padding:20px 24px; border-top:1px solid var(--bd-soft);
 }
 .btn{
   border-radius:12px; padding:10px 16px; font-weight:700; font-size:14px; cursor:pointer;
   border:1px solid var(--bd-strong); background:rgba(255,255,255,.08); color:#E7F0FF;
 }
 .btn-ghost{ background:rgba(255,255,255,.08); }
-
-/* Botão Iniciar (verde) */
-.modal-footer .btn-accent{
-  --btn-green: #4ADE80;       /* base */
-  --btn-green-hover: #16A34A; /* hover */
-  background: var(--btn-green);
-  color: #FFFFFF;
-  border: 1px solid var(--btn-green);
-  box-shadow: none;
-  transition: background-color .2s ease, border-color .2s ease, transform .05s ease;
+.btn-accent{
+  background:#4ADE80; color:#06291A; border:1px solid #4ADE80;
 }
-.modal-footer .btn-accent:hover{
-  background: var(--btn-green-hover);
-  border-color: var(--btn-green-hover);
-}
-.modal-footer .btn-accent:active{ transform: translateY(1px); }
-.modal-footer .btn-accent:focus-visible{
-  outline: 3px solid rgba(74, 222, 128, 0.4);
-  outline-offset: 2px;
-}
-
-/* Select menu visível no tema escuro */
-.modal select{ background:#1E3A5F; color:#FFFFFF; border:1px solid #2A4C70; }
-.modal select:focus{ border-color:#FBBF24; }
-.modal select option,
-.modal select optgroup{
-  background:#1E3A5F !important; color:#FFFFFF !important;
-}
-.modal select option:checked,
-.modal select option:hover{
-  background:#16395B !important; color:#FFFFFF !important;
-}
+.btn-accent:hover{ background:#16A34A; border-color:#16A34A; color:#E6FFEF; }
 </style>

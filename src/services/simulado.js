@@ -59,12 +59,10 @@ export async function registrarResultadoSimulado(cod_simulado, dados) {
     })
 }
 
-/* ✅ Novo: resultados por usuário */
 export async function listarResultadosPorUsuario(cod_usuario) {
     return apiFetch(`${baseUrl}/resultados/usuario/${cod_usuario}`, { method: 'GET' })
 }
 
-/* ✅ Novo: vincular matérias ao simulado */
 export async function vincularMateriasAoSimulado(cod_simulado, listaCodMaterias) {
     return apiFetch(`${baseUrl}/${cod_simulado}/materias`, {
         method: 'POST',

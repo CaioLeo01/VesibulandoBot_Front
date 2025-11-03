@@ -44,15 +44,20 @@ export async function getAlunosProfessor(codProfessor) {
 }
 
 /**
- * 🔹 (Opcional) Busca usuário por ID
- * GET /api/v1/usuario/:id
- * (Se você decidir implementar esse endpoint no backend)
+ * 🔹 Associa automaticamente alunos a um professor (2–6)
+ * POST /api/v1/usuario/professor/:cod_professor/associar-alunos
  */
-export async function getUsuarioPorId(id) {
-  const res = await fetch(`${BASE_URL}/usuario/${id}`, {
-    method: 'GET',
+export async function associarAlunosProfessor(codProfessor) {
+  const res = await fetch(`${BASE_URL}/usuario/professor/${codProfessor}/associar-alunos`, {
+    method: 'POST',
     credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
   })
-  if (!res.ok) throw new Error(`Erro ao buscar usuário ${id}: ${res.status}`)
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.erro || `Erro ao associar alunos: ${res.status}`)
+  }
+
   return await res.json()
 }

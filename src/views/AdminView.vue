@@ -30,12 +30,34 @@
             </div>
           </header>
           <br>
-          <button class="btn btn-config" @click="openChallengeConfig">
-            Configurar Desafio
-          </button>
-          <button class="btn btn-config" @click="openPergunta">
-            Adicionar nova Pergunta
-          </button>
+          <div class="field-row compact">
+            <span class="inline-label">Filtro:</span>
+
+            <!-- Select -->
+            <select id="sel-sim" v-model="filtroSimulado" class="select compact">
+              <option :value="null">Todos os simulados</option>
+              <option v-for="s in simuladosOptions" :key="s.value" :value="s.value">
+                {{ s.label }}
+              </option>
+            </select>
+
+            <!-- Botões -->
+            <button class="btn btn-config compact" @click="openChallengeConfig">
+              Configurar Desafio
+            </button>
+            <button class="btn btn-config compact" @click="openPergunta">
+              Adicionar nova Pergunta
+            </button>
+            <button
+              v-if="!turmaGerada"
+              class="btn btn-config compact"
+              :disabled="gerandoTurma"
+              @click="gerarTurma"
+            >
+              <span v-if="!gerandoTurma">Gerar Turma</span>
+              <span v-else>Gerando...</span>
+            </button>
+          </div>
         </section>
 
         <!-- Tabela de alunos -->
@@ -63,14 +85,14 @@
                 <tr v-else-if="error">
                   <td colspan="4" class="error">{{ error }}</td>
                 </tr>
-                <tr v-else-if="!alunos.length">
+                <tr v-else-if="!alunosExibidos.length">
                   <td colspan="4" class="empty">Nenhum aluno encontrado</td>
                 </tr>
-                <tr v-for="aluno in alunos" :key="aluno.cod_usuario">
+                <tr v-for="aluno in alunosExibidos" :key="aluno.cod_usuario">
                   <td>{{ aluno.cod_usuario }}</td>
                   <td>{{ aluno.nome_usuario }}</td>
                   <td>{{ aluno.qtd_acertos ?? '-' }}</td>
-                  <td>{{ aluno.percentual_acertos ? aluno.percentual_acertos + '%' : '-' }}</td>
+                  <td>{{ aluno.percentual_acertos != null ? aluno.percentual_acertos + '%' : '-' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -108,42 +130,93 @@
     <adicionarNovaPergunta
       v-model="showPerguntaModal"
       :initial="config"
-      :simulados="simulados"
+      :simulados="simuladosRaw"
       @apply="applyPergunta"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import ChallengeConfigModal from '@/components/challenge/ChallengeConfigModal.vue'
 import adicionarNovaPergunta from '@/components/admin/adicionarNovaPergunta.vue'
 import { logout as doLogout } from '@/services/auth.js'
-import { getUsuarioLogado, getAlunosProfessor } from '@/services/usuario.js'
+import { getUsuarioLogado, getAlunosProfessor, associarAlunosProfessor } from '@/services/usuario.js'
+import { listarSimulados } from '@/services/simulado.js'  
 import logoUrl from '../assets/Icone.ico'
+import { useToast } from 'vue-toastification'
 
+const toast = useToast()
 const router = useRouter()
 const sidebarOpen = ref(false)
 const logo = logoUrl
 
-/* ==========================================================
-   🔹 ESTADO
-========================================================== */
 const alunos = ref([])
 const loading = ref(true)
 const error = ref(null)
 const showChallengeConfigModal = ref(false)
 const showPerguntaModal = ref(false)
+const gerandoTurma = ref(false)
+const turmaGerada = ref(false)
+const codProfessor = ref(null)
 
-/* ==========================================================
-   🔹 FUNÇÕES
-========================================================== */
 function openSidebar() { sidebarOpen.value = true }
 function closeSidebar() { sidebarOpen.value = false }
 function openChallengeConfig() { showChallengeConfigModal.value = true }
 function openPergunta() { showPerguntaModal.value = true }
+function handleMobileLogout() {
+   closeSidebar()
+   onLogout()
+}
+
+const simuladosRaw = ref([])
+const filtroSimulado = ref(null)
+const simuladosOptions = computed(() =>
+  simuladosRaw.value.map(s => ({ value: s.cod_simulado, label: s.titulo }))
+)
+
+function calculaPercentual(r) {
+  if (typeof r?.nota_final === 'number' && !Number.isNaN(r.nota_final)) {
+    return Math.round(r.nota_final)
+  }
+  const ac = r?.qtd_acertos ?? 0
+  const er = r?.qtd_erros ?? 0
+  const tot = ac + er
+  return tot > 0 ? Math.round((ac / tot) * 100) : null
+}
+
+function pickResultadoFiltrado(aluno) {
+  const lista = Array.isArray(aluno.resultados_simulados) ? aluno.resultados_simulados : []
+  const ordenados = [...lista].sort((a, b) => new Date(b.dt_finalizacao) - new Date(a.dt_finalizacao))
+
+  for (const r of ordenados) {
+    if (filtroSimulado.value != null && r.cod_simulado !== filtroSimulado.value) continue
+    return r
+  }
+  return null
+}
+
+const alunosExibidos = computed(() => {
+  return (alunos.value || []).map(a => {
+    const r = pickResultadoFiltrado(a)
+    if (!r) {
+      return {
+        cod_usuario: a.cod_usuario,
+        nome_usuario: a.nome_usuario,
+        qtd_acertos: null,
+        percentual_acertos: null
+      }
+    }
+    return {
+      cod_usuario: a.cod_usuario,
+      nome_usuario: a.nome_usuario,
+      qtd_acertos: r.qtd_acertos ?? null,
+      percentual_acertos: calculaPercentual(r)
+    }
+  })
+})
 
 async function onLogout() {
   try {
@@ -153,20 +226,56 @@ async function onLogout() {
   }
 }
 
-async function carregarAlunosDoProfessor() {
+
+async function verificarTurmaOuGerarBotao() {
   try {
     loading.value = true
-    error.value = null
     const usuario = await getUsuarioLogado()
-    if (usuario?.cod_usuario) {
-      const lista = await getAlunosProfessor(usuario.cod_usuario)
+    if (!usuario?.cod_usuario) {
+      error.value = 'Usuário logado inválido'
+      return
+    }
+
+    codProfessor.value = usuario.cod_usuario
+
+    const lista = await getAlunosProfessor(usuario.cod_usuario)
+    if (Array.isArray(lista) && lista.length > 0) {
+      turmaGerada.value = true
       alunos.value = lista
     } else {
-      error.value = 'Usuário logado inválido'
+      turmaGerada.value = false
     }
   } catch (e) {
     console.error(e)
-    error.value = 'Erro ao carregar dados dos alunos.'
+    error.value = 'Erro ao verificar turma.'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function gerarTurma() {
+  try {
+    gerandoTurma.value = true
+    await associarAlunosProfessor(codProfessor.value)
+    toast.info('Turma gerada com sucesso!')
+    turmaGerada.value = true
+    await carregarAlunosDoProfessor()
+  } catch (err) {
+    console.error(err)
+    toast.error('Erro ao gerar turma.')
+  } finally {
+    gerandoTurma.value = false
+  }
+}
+
+async function carregarAlunosDoProfessor() {
+  try {
+    loading.value = true
+    const lista = await getAlunosProfessor(codProfessor.value)
+    alunos.value = Array.isArray(lista) ? lista : []
+  } catch (e) {
+    console.error(e)
+    error.value = 'Erro ao carregar alunos.'
   } finally {
     loading.value = false
   }
@@ -182,10 +291,15 @@ function applyPergunta(payload) {
   showPerguntaModal.value = false
 }
 
-/* ==========================================================
-   🔹 LIFECYCLE
-========================================================== */
-onMounted(() => carregarAlunosDoProfessor())
+onMounted(async () => {
+  await verificarTurmaOuGerarBotao()
+  try {
+    const sims = await listarSimulados()
+    simuladosRaw.value = Array.isArray(sims) ? sims : []
+  } catch {
+    simuladosRaw.value = []
+  }
+})
 </script>
 
 <style scoped>
@@ -259,6 +373,42 @@ onMounted(() => carregarAlunosDoProfessor())
   margin: 0 auto;
   flex: 1;
   width: 100%;
+}
+
+/* linha do filtro com espaçamento de 2px */
+.field-row.compact{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  flex-wrap:wrap; /* quebra bonitinho no mobile */
+}
+
+/* “Filtro:” inline e discreto */
+.inline-label{
+  color:#fff;
+  font-weight:700;
+  font-size:14px;
+  margin-right:2px; /* mantém o padrão de 2px */
+}
+
+/* select compacto */
+.select.compact{
+  width:auto;
+  min-width:220px;   /* ajuste se quiser menor/maior */
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid #2A4C70;
+  background:#16304A;
+  color:#ffffff;
+  font-size:14px;
+  outline:none;
+}
+
+/* botões compactos com “2px” de separação herdado do gap */
+.btn-config.compact{
+  padding:8px 12px;
+  border-radius:10px;
+  font-weight:700;
 }
 
 .sidebar-slot {

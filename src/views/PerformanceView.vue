@@ -38,7 +38,7 @@
           <aside class="panel panel-summary">
             <h3>Desempenho</h3>
               <div class="chart-container">
-                <canvas id="chartDesempenho"></canvas>
+                <canvas id="chartDesempenho" height="260"></canvas>
               </div>
           </aside>
         </section>
@@ -69,67 +69,54 @@
     <filtroAdminModal
       v-model="showFiltroModal"
       :initial="config"
-      :simulados="simulados"
+      :simulados="simuladosRaw"
       @apply="applyFiltro"
-    />
-
-    <!-- MODAL DE Pergunta -->
-    <adicionarNovaPergunta
-      v-model="showPerguntaModal"
-      :initial="config"
-      :simulados="simulados"
-      @apply="applyPergunta"
     />
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, computed, onBeforeUnmount, watch } from 'vue'
+import { reactive, ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import filtroAdminModal from '@/components/admin/filtroAdminModal.vue'
-import adicionarNovaPergunta from '@/components/admin/adicionarNovaPergunta.vue'
 import { logout as doLogout } from '@/services/auth.js'
+import { getUsuarioLogado } from '@/services/usuario.js'
+import { listarResultadosPorUsuario, listarSimulados } from '@/services/simulado.js'
 import logoUrl from '../assets/Icone.ico'
-import { onMounted } from 'vue'
 import { Chart, LineElement, PointElement, LineController, CategoryScale, LinearScale, Tooltip, Legend } from 'chart.js'
 
 const router = useRouter()
 const route = useRoute()
 const sidebarOpen = ref(false)
 const logo = logoUrl
+const user = ref(null)
+const resultados = ref([])
+let chartInstance = null
 
-// Lista de 30 alunos
-const alunos = ref(Array.from({ length: 30 }, (_, i) => ({
-  codigo: `A00${i + 1}`,
-  nome: `Aluno ${i + 1}`,
-  status: i % 2 === 0 ? 'Ativo' : 'Inativo',
-  acertos: Math.floor(Math.random() * 25) + 5,
-  percentualAcertos: Math.floor(Math.random() * 100)
-})))
+const simuladosRaw = ref([]) 
 
-const simulados = [
-  { label: 'ENEM por Matéria', value: 'enem-mix' },
-  { label: 'ENEM por Blocos', value: 'enem-2022' },
-]
-
-const categorias = [
-  { label: 'Todas as matérias', value: 'todas' },
-  { label: 'Matemática', value: 'matematica' },
-  { label: 'Português', value: 'portugues' },
-  { label: 'Ciências', value: 'ciencias' }
-]
-
-const selectedSimulado = ref(simulados[0].value)
-const selectedCategoria = ref(categorias[0].value)
-
-const personalAcertos = computed(() => {
-  return alunos.value.reduce((total, aluno) => total + aluno.acertos, 0)
+const config = reactive({
+  cod_simulado: null,
+  cod_materia: null
 })
 
-const personalPercentualAcertos = computed(() => {
-  const totalAcertos = alunos.value.reduce((total, aluno) => total + aluno.acertos, 0)
-  return Math.floor((totalAcertos / (alunos.value.length * 25)) * 100)
+const simuladoById = computed(() => {
+  const m = new Map()
+  for (const s of simuladosRaw.value) m.set(s.cod_simulado, s)
+  return m
+})
+
+const resultadosFiltrados = computed(() => {
+  return resultados.value.filter(r => {
+    if (config.cod_simulado != null && r.cod_simulado !== config.cod_simulado) return false
+    if (config.cod_materia != null) {
+      const s = simuladoById.value.get(r.cod_simulado)
+      const cods = s?.cod_materias || []
+      if (!cods.includes(config.cod_materia)) return false
+    }
+    return true
+  })
 })
 
 function openSidebar() {
@@ -147,16 +134,37 @@ function handleMobileLogout() {
 
 Chart.register(LineElement, PointElement, LineController, CategoryScale, LinearScale, Tooltip, Legend)
 
-onMounted(() => {
-  const ctx = document.getElementById('chartDesempenho')
+function notaPercentual(r) {
+  if (typeof r.nota_final === 'number') return r.nota_final
+  const total = (r.qtd_acertos ?? 0) + (r.qtd_erros ?? 0)
+  return total > 0 ? Math.round((r.qtd_acertos / total) * 100) : 0
+}
 
-  new Chart(ctx, {
+function labelDoPonto(r) {
+  try {
+    return new Date(r.dt_finalizacao).toLocaleDateString('pt-BR')
+  } catch {
+    return `Simulado ${r.cod_simulado}`
+  }
+}
+
+function renderChart() {
+  const ctx = document.getElementById('chartDesempenho')
+  if (!ctx) return
+  if (chartInstance) {
+    chartInstance.destroy()
+  }
+  const base = resultadosFiltrados.value
+  const labels = base.map(labelDoPonto)
+  const dataPts = base.map(notaPercentual)
+
+  chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+      labels,
       datasets: [{
         label: 'Acertos (%)',
-        data: [60, 62, 70, 68, 72, 75, 78, 80, 82, 85, 88, 90],
+        data: dataPts,
         fill: true,
         tension: 0.4,
         borderColor: '#4ade80',
@@ -168,24 +176,20 @@ onMounted(() => {
       }]
     },
     options: {
+      maintainAspectRatio: false,
       responsive: true,
       plugins: {
-        legend: {
-          labels: { color: '#fff', font: { size: 14, weight: 'bold' } }
-        },
-        tooltip: {
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          titleColor: '#fff',
-          bodyColor: '#fff'
-        }
+        legend: { labels: { color: '#fff', font: { size: 14, weight: 'bold' } } },
+        tooltip: { backgroundColor: 'rgba(0,0,0,0.7)', titleColor: '#fff', bodyColor: '#fff' }
       },
       scales: {
-        x: {
-          ticks: { color: '#fff', font: { size: 12 } },
-          grid: { color: 'rgba(255,255,255,0.15)' }
-        },
+        x: { ticks: { color: '#fff', font: { size: 12 } }, grid: { color: 'rgba(255,255,255,0.15)' } },
         y: {
-          ticks: { color: '#fff', font: { size: 12 }, callback: v => v + '%' },
+          ticks: {
+            color: '#fff',
+            font: { size: 12 },
+            callback: (v) => `${v}%`
+          },
           grid: { color: 'rgba(255,255,255,0.1)' },
           min: 0,
           max: 100
@@ -193,148 +197,39 @@ onMounted(() => {
       }
     }
   })
+}
+
+onMounted(async () => {
+  try {
+    user.value = await getUsuarioLogado()
+    const data = await listarResultadosPorUsuario(user.value.cod_usuario)
+    resultados.value = Array.isArray(data)
+      ? [...data].sort((a, b) => new Date(a.dt_finalizacao) - new Date(b.dt_finalizacao))
+      : []
+    const sims = await listarSimulados()
+    simuladosRaw.value = Array.isArray(sims) ? sims : []
+  } catch (e) {
+    console.error('Falha ao carregar resultados do usuário logado', e)
+    resultados.value = []
+    simuladosRaw.value = []
+  } finally {
+    renderChart()
+  }
 })
 
-/* ======================= API ======================= */
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
-
-async function apiFetch(path, { method = 'GET', headers = {}, body } = {}) {
-  const token = localStorage.getItem('token')
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers
-    },
-    body: body ? JSON.stringify(body) : undefined
-  })
-  const isJson = res.headers.get('content-type')?.includes('application/json')
-  const data = isJson ? await res.json().catch(() => null) : null
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`)
-  return data
-}
-
-async function apiStartChallenge(cfg) {
-  return apiFetch('/challenges/start', { method: 'POST', body: cfg })
-}
-async function apiNextQuestion(challengeId) {
-  return apiFetch(`/challenges/${challengeId}/next`)
-}
-async function apiSubmitAnswer({ challengeId, questionId, answer }) {
-  return apiFetch(`/challenges/${challengeId}/answers`, {
-    method: 'POST',
-    body: { questionId, answer }
-  })
-}
-async function apiSkipQuestion({ challengeId, questionId }) {
-  return apiFetch(`/challenges/${challengeId}/skip`, {
-    method: 'POST',
-    body: { questionId }
-  })
-}
+watch(resultadosFiltrados, () => {
+  renderChart()
+})
 
 const showFiltroModal = ref(false)
 function openFiltro() { showFiltroModal.value = true }
 async function applyFiltro(payload) {
-  Object.assign(config, payload)
+  config.cod_simulado = payload.cod_simulado ?? null
+  config.cod_materia  = payload.cod_materia  ?? null
+  renderChart()
   showFiltroModal.value = false
 }
 
-const showPerguntaModal = ref(false)
-function openPergunta() { showPerguntaModal.value = true }
-async function applyPergunta(payload) {
-  Object.assign(config, payload)
-  showPerguntaModal.value = false
-}
-
-const challengeId = ref(null)
-const loading = ref(false)
-const finished = ref(false)
-const error = ref(null)
-
-const question = reactive({ id: null, title: '', options: [] })
-const selectedOption = ref(null)
-
-function setQuestion(q) {
-  question.id = q?.id ?? null
-  question.title = q?.title ?? ''
-  question.options = Array.isArray(q?.options) ? q.options : []
-  selectedOption.value = null
-}
-
-async function startChallenge() {
-  loading.value = true; error.value = null
-  try {
-    const res = await apiStartChallenge({
-      simulado: config.simulado,
-      categoria: config.categoria,
-      dificuldade: config.dificuldade,
-      ano: config.ano
-    })
-    challengeId.value = res.challengeId
-    finished.value = !res.question
-    setQuestion(res.question)
-  } catch (e) {
-    error.value = e.message || 'Falha ao iniciar desafio'
-    setQuestion(null)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function startNewQuestion() {
-  if (!challengeId.value) return
-  loading.value = true; error.value = null
-  try {
-    const res = await apiNextQuestion(challengeId.value)
-    if (res.finished) {
-      finished.value = true
-      setQuestion(null)
-    } else {
-      setQuestion(res.question)
-    }
-  } catch (e) {
-    error.value = e.message || 'Falha ao buscar próxima questão'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function confirmAnswer() {
-  if (!challengeId.value || !question.id || !selectedOption.value) return
-  loading.value = true; error.value = null
-  try {
-    await apiSubmitAnswer({
-      challengeId: challengeId.value,
-      questionId: question.id,
-      answer: selectedOption.value
-    })
-    await startNewQuestion()
-  } catch (e) {
-    error.value = e.message || 'Falha ao enviar resposta'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function skipQuestion() {
-  if (!challengeId.value || !question.id) return
-  loading.value = true; error.value = null
-  try {
-    await apiSkipQuestion({
-      challengeId: challengeId.value,
-      questionId: question.id
-    })
-    await startNewQuestion()
-  } catch (e) {
-    error.value = e.message || 'Falha ao pular questão'
-  } finally {
-    loading.value = false
-  }
-}
-
-/* Logout */
 async function onLogout() {
   try {
     await doLogout()
@@ -409,11 +304,14 @@ async function onLogout() {
 
 .header{ padding:12px 16px 0 16px; }
 .header h1{ color:#fff; margin:0; font-size:28px; line-height:1.2; }
-.header-sub{ margin:4px 0 0 0; color:#cfe8ff; }
+.header-sub{ font-size: 12px; margin: 0; color:#cfe8ff; }
 .panel{ background:var(--c-surface); border:1px solid var(--bd-soft); border-radius:16px; box-shadow:var(--shadow); }
-.panel-config{ padding:16px; margin-top:12px; }
+.panel-config {
+  padding: 12px;
+  margin-top: 8px;
+}
 .panel-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px;color: #F1F5F9; }
-.panel-top h2{ margin:0; color:var(--c-text); }
+.panel-top h2 { font-size: 18px; margin: 0 0 2px 0; }
 .panel-sub{ margin:4px 0 0 0; color:#999b9e; }
 
 /* ===== Botões ===== */
@@ -424,14 +322,15 @@ async function onLogout() {
 .btn-config{
   background-color:#00aa3e; color:#fff; border:none;
   margin-left: 3px;
-  padding:12px 18px; border-radius:999px; font-weight:800;
+  margin-top: 4px;
+  padding: 10px 14px; border-radius:999px; font-weight:800;
   box-shadow:0 8px 20px rgba(22,163,74,.25); transition:all .2s ease;
 }
 .btn-config:active{ transform:translateY(0); }
 
 /* ===== Grid ===== */
-.grid-panels{ display:grid; gap:16px; margin-top:16px; min-width:0; padding:0 16px; }
-.panel-summary{ padding:12px; color:#000; background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.12); }
+.grid-panels{ display:grid; gap: 12px; margin-top: 8px; min-width:0; padding: 0 12px 12px; }
+.panel-summary{ padding: 10px; color:#000; background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.12); }
 .panel-summary h3{ margin:0 0 8px 0; color:#fff; }
 .panel-question{ padding:16px; }
 .panel-title{ display:flex; align-items:center; margin-bottom:8px; }
@@ -545,12 +444,18 @@ html, body { overflow-x:hidden; }
   position: relative;
   width: 100%;
   max-width: 900px;
+  max-height: 320px;
+  height: 320px;
   margin: 24px auto;
   background: rgba(255,255,255,0.08);
   border-radius: 12px;
-  padding: 24px;
+  padding: 12px;
   box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+  overflow: hidden;
 }
 
-
+.chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
 </style>
