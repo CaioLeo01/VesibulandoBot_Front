@@ -4,35 +4,12 @@
       <div class="modal" role="dialog" aria-modal="true">
         <!-- Cabeçalho -->
         <header class="modal-header">
-          <h2>Cadastrar Simulado</h2>
+          <h2>Gerar Simulado</h2>
           <button class="icon-btn" @click="close" aria-label="Fechar">✕</button>
         </header>
 
         <!-- Corpo -->
         <section class="modal-body">
-          <!-- Título -->
-          <div class="field">
-            <label for="titulo">Título</label>
-            <input
-              id="titulo"
-              v-model="local.titulo"
-              placeholder="Ex: Simulado ENEM 2025"
-              class="input"
-            />
-          </div>
-
-          <!-- Descrição -->
-          <div class="field">
-            <label for="descricao">Descrição</label>
-            <textarea
-              id="descricao"
-              v-model="local.descricao"
-              rows="3"
-              placeholder="Breve descrição..."
-              class="input"
-            ></textarea>
-          </div>
-
           <!-- Matérias -->
           <div class="field">
             <label>Matéria(s)</label>
@@ -54,39 +31,32 @@
             <small class="hint">Selecione uma ou mais matérias</small>
           </div>
 
-          <!-- Questões -->
-          <div v-if="questoesFiltradas.length" class="field">
-            <label>Selecione até 40 questões</label>
-            <div class="questoes-list">
-              <label
-                v-for="q in questoesFiltradas"
-                :key="q.cod_questao"
-                class="checkbox-line"
-              >
-                <input
-                  type="checkbox"
-                  :value="q.cod_questao"
-                  v-model="local.questoesSelecionadas"
-                  :disabled="isLimiteAtingido && !local.questoesSelecionadas.includes(q.cod_questao)"
-                />
-                <span>{{ q.tx_questao }}</span>
-              </label>
-            </div>
-            <p class="hint">
-              {{ local.questoesSelecionadas.length }}/40 selecionadas
-            </p>
+          <!-- Quantidade -->
+          <div class="field">
+            <label for="qtd">Quantidade de questões (1 a 40)</label>
+            <input
+              id="qtd"
+              type="number"
+              class="input"
+              min="1"
+              max="40"
+              v-model.number="local.qtdQuestoes"
+            />
+            <small class="hint">
+              Banco disponível para o filtro atual: {{ totalQuestoesDisponiveis }}
+            </small>
           </div>
         </section>
 
         <!-- Rodapé -->
         <footer class="modal-footer">
-          <button class="btn btn-ghost" @click="close">Cancelar</button>
+          <button class="btn" @click="close">Cancelar</button>
           <button
             class="btn btn-accent"
             :disabled="!podeSalvar"
             @click="salvar"
           >
-            Salvar Simulado
+            Gerar
           </button>
         </footer>
       </div>
@@ -99,6 +69,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { listarMaterias } from '@/services/materias.js'
 import { listarQuestoesPorMateria } from '@/services/questao.js'
 import { criarSimulado, adicionarQuestaoSimulado } from '@/services/simulado.js'
+import { getUsuarioLogado } from '@/services/usuario.js'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -106,31 +77,27 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'salvo'])
 
 const materias = ref([])
-const questoes = ref([])
+const questoes = ref([]) // pool agregado de questões com base nas matérias marcadas
 const carregando = ref(false)
+const usuario = ref(null)
 
 const local = reactive({
-  titulo: '',
-  descricao: '',
+  // titulo/descricao NÃO são exibidos — serão gerados automaticamente no salvar()
   materiasSelecionadas: [],
-  questoesSelecionadas: [],
+  qtdQuestoes: 10, // default
 })
 
-const questoesFiltradas = computed(() => {
-  if (!local.materiasSelecionadas.length) return []
-  return questoes.value.filter(q =>
-    local.materiasSelecionadas.includes(q.cod_materia)
+// computeds
+const totalQuestoesDisponiveis = computed(() => questoes.value.length)
+
+const podeSalvar = computed(() => {
+  const qtd = Number(local.qtdQuestoes || 0)
+  return (
+    local.materiasSelecionadas.length > 0 &&
+    qtd >= 1 && qtd <= 40 &&
+    totalQuestoesDisponiveis.value > 0
   )
 })
-
-const isLimiteAtingido = computed(() => local.questoesSelecionadas.length >= 40)
-const podeSalvar = computed(() =>
-  local.titulo.trim() &&
-  local.descricao.trim() &&
-  local.materiasSelecionadas.length > 0 &&
-  local.questoesSelecionadas.length > 0 &&
-  local.questoesSelecionadas.length <= 40
-)
 
 /* === Métodos === */
 async function carregarMaterias() {
@@ -144,6 +111,14 @@ async function carregarMaterias() {
   }
 }
 
+async function carregarUsuario() {
+  try {
+    usuario.value = await getUsuarioLogado()
+  } catch (e) {
+    console.error('❌ Erro ao obter usuário logado:', e)
+  }
+}
+
 async function carregarQuestoes() {
   try {
     questoes.value = []
@@ -151,19 +126,48 @@ async function carregarQuestoes() {
       const lista = await listarQuestoesPorMateria(cod)
       if (Array.isArray(lista)) questoes.value.push(...lista)
     }
+    // garantir unicidade por cod_questao (se vierem repetidas ao cruzar matérias)
+    const seen = new Set()
+    questoes.value = questoes.value.filter(q => {
+      if (seen.has(q.cod_questao)) return false
+      seen.add(q.cod_questao)
+      return true
+    })
   } catch (e) {
     console.error('❌ Erro ao carregar questões:', e)
   }
+}
+
+function formatarDataDDMM(d = new Date()) {
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}/${mm}`
+}
+
+function embaralhar(array) {
+  // Fisher–Yates
+  const a = [...array]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }
 
 async function salvar() {
   try {
     carregando.value = true
 
-    // 🔹 Envia `cod_materias` (plural) conforme o backend novo
+    // monta título/descrição automáticos (não exibidos na UI)
+    const nome = usuario.value?.nome_usuario || 'Aluno'
+    const data = formatarDataDDMM()
+    const tituloAuto = `Simulado ${nome} ${data}`
+    const descricaoAuto = `Simulado ${nome} ${data}`
+
+    // cria o simulado com as matérias
     const sim = await criarSimulado({
-      titulo: local.titulo,
-      descricao: local.descricao,
+      titulo: tituloAuto,
+      descricao: descricaoAuto,
       ativo: true,
       cod_materias: local.materiasSelecionadas
     })
@@ -174,16 +178,25 @@ async function salvar() {
       return
     }
 
-    // 🔹 Adiciona as questões ao simulado
-    for (const cod_questao of local.questoesSelecionadas) {
-      await adicionarQuestaoSimulado(idSimulado, { cod_questao })
+    // sorteia questões aleatórias do pool
+    const qtdSolicitada = Math.max(1, Math.min(Number(local.qtdQuestoes || 1), 40))
+    const pool = embaralhar(questoes.value)
+    const selecionadas = pool.slice(0, Math.min(qtdSolicitada, pool.length))
+
+    // adiciona questões ao simulado
+    for (const q of selecionadas) {
+      await adicionarQuestaoSimulado(idSimulado, { cod_questao: q.cod_questao })
     }
 
-    emit('salvo', sim)
+    emit('salvo', {
+      ...sim,
+      // extra opcional para quem consome
+      quantidade: selecionadas.length
+    })
     close()
   } catch (e) {
-    console.error('❌ Erro ao salvar simulado:', e)
-    alert('Erro ao salvar simulado. Veja o console para detalhes.')
+    console.error('❌ Erro ao gerar simulado:', e)
+    alert('Erro ao gerar simulado. Veja o console para detalhes.')
   } finally {
     carregando.value = false
   }
@@ -193,21 +206,24 @@ function close() {
   emit('update:modelValue', false)
 }
 
-watch(() => props.modelValue, open => {
-  if (open) carregarMaterias()
-  else {
+watch(() => props.modelValue, async open => {
+  if (open) {
+    await Promise.all([carregarUsuario(), carregarMaterias()])
+    // reset dos campos visíveis
     Object.assign(local, {
-      titulo: '',
-      descricao: '',
       materiasSelecionadas: [],
-      questoesSelecionadas: [],
+      qtdQuestoes: 10,
     })
+    questoes.value = []
+  } else {
+    // limpeza ao fechar
     questoes.value = []
   }
 })
 </script>
 
 <style scoped>
+/* mesmo visual do seu modal anterior, sem campos de título/descrição */
 .overlay {
   position: fixed;
   inset: 0;
@@ -258,20 +274,13 @@ watch(() => props.modelValue, open => {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
-.modal-body::-webkit-scrollbar {
-  width: 8px;
-}
+.modal-body::-webkit-scrollbar { width: 8px; }
 .modal-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.3);
   border-radius: 4px;
 }
-.field {
-  color: #fff;
-  display: grid;
-  gap: 8px;
-}
-.input,
-textarea {
+.field { color: #fff; display: grid; gap: 8px; }
+.input, textarea {
   width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.25);
@@ -282,29 +291,13 @@ textarea {
   font-size: 14px;
   box-sizing: border-box;
 }
-textarea {
-  resize: none;
-}
-.hint {
-  color: #cfe8ff;
-  font-size: 12px;
-}
+.hint { color: #cfe8ff; font-size: 12px; }
 .materias-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
   max-height: 150px;
   overflow-y: auto;
-  padding: 10px;
-  border-radius: 10px;
-}
-.questoes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 50vh;
-  overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 10px;
   border-radius: 10px;
 }
@@ -342,8 +335,5 @@ textarea {
   border: 1px solid #4ade80;
   color: #fff;
 }
-.btn-accent:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

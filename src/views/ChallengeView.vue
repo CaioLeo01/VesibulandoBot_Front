@@ -1,10 +1,9 @@
 <template>
   <div class="challenge">
-    <!-- Top bar (mobile) -->
+    <!-- Top bar -->
     <header class="challenge-top">
       <button class="menu-toggle" type="button" @click="openSidebar">
-        <i class="fa-solid fa-bars"></i>
-        Menu
+        <i class="fa-solid fa-bars"></i> Menu
       </button>
       <div class="brand">
         <img :src="logo" alt="VestibulandoBot" />
@@ -18,196 +17,200 @@
         <AppSidebar @logout="onLogout" />
       </div>
 
-      <!-- Conteúdo -->
+      <!-- Conteúdo central -->
       <div class="center">
-        <!-- Painel: configurar -->
+        <!-- Painel de seleção -->
         <section class="panel panel-config">
           <header class="panel-top">
             <div>
-              <h2>Configurar desafio</h2>
+              <h2>Selecionar simulado</h2>
               <p class="header-sub">
-                Simulados, foco e progresso contínuo. Mude as opções quando quiser.
+                Escolha um simulado disponível e comece agora mesmo seu treino!
               </p>
             </div>
-            <button class="btn btn-config" @click="openConfig">Configurar desafio</button>
+
+            <!-- agrupa os botões para controlar o gap -->
+            <div class="panel-actions">
+              <button class="btn btn-config" @click="showAlunoModal = true">
+                Gerar Desafio
+              </button>
+              <button class="btn btn-config" @click="openSelector">
+                Selecionar Desafio
+              </button>
+            </div>
           </header>
         </section>
 
-        <!-- Grid principal -->
-        <section class="grid-panels">
-          <!-- Painel questão -->
+        <!-- Painel principal -->
+        <section class="grid-panels" v-if="isConfigured">
+          <!-- Painel de questões -->
           <div class="panel panel-question">
-            <div class="panel-title">
-              <div class="timer" :style="{ color: timerColor }">
-                <i class="dot" /> {{ timeDownMMSS }}
-              </div>
+            <div class="question-header">
+              <h3 class="simulado-title">{{ labelSimulado }}</h3>
+              <p class="materia-label">{{ labelMateria }}</p>
             </div>
 
+            <!-- Questão -->
             <article class="question-card" v-if="currentQuestion && !finished">
+              <p class="ano-questao">Ano: {{ currentQuestion.questao?.ano_questao || '—' }}</p>
               <h4 class="question-title">
-                {{ questionIndex + 1 }}. {{ currentQuestion.enunciado }}
+                {{ questionIndex + 1 }}. {{ currentQuestion.questao?.tx_questao || 'Questão indisponível' }}
               </h4>
 
-              <div class="options">
+              <!-- Alternativas -->
+              <div class="options" v-if="currentQuestion.questao?.alternativas?.length">
                 <label
-                  v-for="opt in ['A','B','C','D','E']"
-                  :key="opt"
+                  v-for="alt in currentQuestion.questao.alternativas"
+                  :key="alt.cod_alternativa"
                   class="option"
-                  :class="{ selected: selectedOption === opt }"
+                  :class="{ selected: selectedOption === alt.tx_letra }"
                 >
-                  <input type="radio" :value="opt" v-model="selectedOption" />
-                  <span class="opt-key">{{ opt }}</span>
-                  <span class="opt-text">
-                    {{ currentQuestion[`alternativa_${opt.toLowerCase()}`] }}
-                  </span>
+                  <input type="radio" :value="alt.tx_letra" v-model="selectedOption" />
+                  <span class="opt-key">{{ alt.tx_letra }}</span>
+                  <span class="opt-text">{{ alt.tx_texto }}</span>
                 </label>
               </div>
 
+              <!-- Sem alternativas -->
+              <div v-else class="options">
+                <p style="color:#666; font-style:italic;">Sem alternativas disponíveis.</p>
+              </div>
+
+              <!-- Botões -->
               <div class="actions-row">
                 <button class="btn btn-skip" @click="skipQuestion" :disabled="loading">Pular</button>
                 <button class="btn btn-confirm" @click="confirmAnswer" :disabled="loading || !selectedOption">Confirmar</button>
-                <button class="btn btn-finish" @click="finalizarSimulado" :disabled="loading">Finalizar</button>
               </div>
             </article>
 
+            <!-- Fim -->
             <article v-else class="question-card">
               <h4 class="question-title">
                 {{ finished ? 'Simulado concluído!' : 'Selecione um simulado para começar.' }}
               </h4>
-              <p v-if="finished">Seus resultados foram enviados com sucesso.</p>
+              <p v-if="finished" class="success-msg">
+                Seus resultados foram registrados, aperte para finalizar!
+              </p>
             </article>
           </div>
 
-          <!-- Painel resumo -->
+          <!-- Painel lateral -->
           <aside class="panel panel-summary">
-            <h3>Resumo do desafio</h3>
+            <h3>Resumo</h3>
             <ul class="summary-list">
               <li><span>Simulado</span><b>{{ labelSimulado }}</b></li>
               <li><span>Matéria</span><b>{{ labelMateria }}</b></li>
-              <li><span>Ano</span><b>{{ labelAno }}</b></li>
+              <li><span>Questão</span><b>{{ questionIndex + 1 }}/{{ questionList.length }}</b></li>
+              <li><span>Acertos</span><b>{{ totalAcertos }}</b></li>
+              <li><span>Erros</span><b>{{ totalErros }}</b></li>
             </ul>
-            <div class="summary-timer">
-              <div class="clock">{{ timeUpHHMMSS }}</div>
-            </div>
+            <button v-if="finished" class="btn btn-finish" @click="finalizarSimulado">
+              Enviar resultado
+            </button>
           </aside>
         </section>
       </div>
     </div>
 
-    <!-- Mobile sidebar -->
-    <transition name="fade">
-      <div v-if="sidebarOpen" class="mobile-sidebar-overlay" @click="closeSidebar"></div>
-    </transition>
-    <transition name="slide">
-      <div v-if="sidebarOpen" class="mobile-sidebar-panel" @click.stop>
-        <div class="mobile-sidebar-header">
-          <button class="close" type="button" @click="closeSidebar">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <AppSidebar @logout="handleMobileLogout" />
-      </div>
-    </transition>
+    <SelecionarChallengeModal
+      v-model="showSelector"
+      @selecionado="applySelection"
+    />
 
-    <!-- MODAL DE CONFIG -->
-    <ChallengeConfigModal
-      v-model="showModal"
-      :initial="config"
-      :simulados="simulados"
-      @apply="applyConfig"
+    <AlunoChallengeConfigModal
+      v-model="showAlunoModal"
+      @salvo="onAlunoSimuladoGerado"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
-import ChallengeConfigModal from '@/components/challenge/ChallengeConfigModal.vue'
-import { listarSimulados, listarQuestoesSimulado, registrarResultadoSimulado } from '@/services/simulado.js'
+import SelecionarChallengeModal from '@/components/challenge/SelecionarChallengeModal.vue'
+import AlunoChallengeConfigModal from '@/components/challenge/AlunoChallengeConfigModal.vue'
+import { listarQuestoesSimulado, registrarResultadoSimulado } from '@/services/simulado.js'
 import { logout as doLogout } from '@/services/auth.js'
+import { getUsuarioLogado } from '@/services/usuario.js'
 import logoUrl from '../assets/Icone.ico'
+import { useToast } from 'vue-toastification'
 
+const toast = useToast()
 const router = useRouter()
 const route = useRoute()
 const sidebarOpen = ref(false)
 const logo = logoUrl
+const user = ref(null)
 
-function openSidebar() { sidebarOpen.value = true }
-function closeSidebar() { sidebarOpen.value = false }
-function handleMobileLogout() { closeSidebar(); onLogout() }
-
-/* ---------- Estado ---------- */
-const showModal = ref(false)
+const showSelector = ref(false)
+const showAlunoModal = ref(false)
 const isConfigured = ref(false)
-const simulados = ref([])
+const loading = ref(false)
+const finished = ref(false)
+
 const config = reactive({
   simulado: null,
-  materia: null,
   simuladoLabel: '',
-  materiaLabel: '',
-  ano: null
+  materiaLabel: ''
 })
 
-/* ---------- Questões ---------- */
 const questionList = ref([])
 const questionIndex = ref(0)
 const selectedOption = ref(null)
-const loading = ref(false)
-const finished = ref(false)
-const currentQuestion = computed(() => questionList.value[questionIndex.value] || null)
+const totalAcertos = ref(0)
+const totalErros = ref(0)
 
-/* ---------- Labels ---------- */
+const currentQuestion = computed(() => questionList.value[questionIndex.value] || null)
 const labelSimulado = computed(() => config.simuladoLabel || '—')
 const labelMateria = computed(() => config.materiaLabel || '—')
-const labelAno = computed(() => config.ano || '—')
 
-/* ---------- Timer ---------- */
-const COUNTDOWN_START = 3 * 60
-const secondsLeft = ref(COUNTDOWN_START)
-const elapsedSeconds = ref(0)
-let countdownTick = null
-let elapsedTick = null
+function openSidebar() { sidebarOpen.value = true }
 
-function formatMMSS(t){ const m=Math.floor(t/60).toString().padStart(2,'0'); const s=(t%60).toString().padStart(2,'0'); return `${m}:${s}` }
-function formatHHMMSS(t){ const h=Math.floor(t/3600).toString().padStart(2,'0'); const m=Math.floor((t%3600)/60).toString().padStart(2,'0'); const s=(t%60).toString().padStart(2,'0'); return `${h}:${m}:${s}` }
-const timeDownMMSS = computed(() => formatMMSS(secondsLeft.value))
-const timeUpHHMMSS = computed(() => formatHHMMSS(elapsedSeconds.value))
-const timerColor = computed(() => secondsLeft.value <= 50 ? '#ef4444' : secondsLeft.value <= 110 ? '#f59e0b' : '#22c55e')
-
-function iniciarTimers(){
-  pararTimers()
-  secondsLeft.value = COUNTDOWN_START
-  elapsedSeconds.value = 0
-  countdownTick = setInterval(() => {
-    if (secondsLeft.value > 0) secondsLeft.value--
-  }, 1000)
-  elapsedTick = setInterval(() => elapsedSeconds.value++, 1000)
+function openSelector() {
+  showSelector.value = true
 }
-function pararTimers(){
-  if (countdownTick) clearInterval(countdownTick)
-  if (elapsedTick) clearInterval(elapsedTick)
+
+async function onAlunoSimuladoGerado(sim) {
+  try {
+    config.simulado = sim?.cod_simulado ?? null
+    config.simuladoLabel = sim?.titulo ?? 'Simulado'
+    config.materiaLabel = Array.isArray(sim?.nomes_materias) && sim.nomes_materias.length
+      ? sim.nomes_materias.join(', ')
+      : '—'
+
+    if (!config.simulado) {
+      toast.error('Não foi possível identificar o simulado criado.')
+      return
+    }
+
+    isConfigured.value = true
+    finished.value = false
+    totalAcertos.value = 0
+    totalErros.value = 0
+
+    await carregarQuestoes()
+    toast.success('Simulado gerado e carregado!')
+  } catch (e) {
+    console.error(e)
+    toast.error('Falha ao carregar o simulado gerado.')
+  } finally {
+    showAlunoModal.value = false
+  }
 }
-onBeforeUnmount(pararTimers)
 
-/* ---------- Ações ---------- */
-function openConfig() { showModal.value = true }
+async function applySelection(simulado) {
+  config.simulado = simulado.cod_simulado
+  config.simuladoLabel = simulado.titulo
+  config.materiaLabel = simulado.nomes_materias?.join(', ') || '—'
 
-async function applyConfig(payload) {
-  Object.assign(config, payload)
   isConfigured.value = true
   finished.value = false
-  showModal.value = false
-
-  // define ano do simulado
-  const sim = simulados.value.find(s => s.cod_simulado === config.simulado)
-  config.ano = sim ? new Date(sim.dt_criacao).getFullYear() : new Date().getFullYear()
-
+  totalAcertos.value = 0
+  totalErros.value = 0
   await carregarQuestoes()
-  iniciarTimers()
 }
 
-/* ---------- Backend ---------- */
 async function carregarQuestoes() {
   if (!config.simulado) return
   loading.value = true
@@ -216,20 +219,37 @@ async function carregarQuestoes() {
     questionList.value = res || []
     questionIndex.value = 0
     selectedOption.value = null
+  } catch (e) {
+    console.error(e)
+    toast.error('Erro ao carregar questões.')
   } finally {
     loading.value = false
   }
 }
 
 function confirmAnswer() {
-  if (!currentQuestion.value || !selectedOption.value) return
+  if (!currentQuestion.value || !selectedOption.value) {
+    toast.warning('Selecione uma alternativa antes de confirmar.')
+    return
+  }
+
+  const correta = currentQuestion.value.questao?.tx_resposta_correta
+  const acertou = selectedOption.value === correta
+
+  if (acertou) totalAcertos.value++
+  else totalErros.value++
+
   currentQuestion.value.userAnswer = selectedOption.value
+  currentQuestion.value.acertou = acertou
+
+  toast.success(acertou ? 'Acertou! 🎯' : 'Errou 😞')
   nextQuestion()
 }
 
 function skipQuestion() {
   if (!currentQuestion.value) return
-  currentQuestion.value.userAnswer = null
+  totalErros.value++ // pular conta como erro
+  toast.info('Questão pulada.')
   nextQuestion()
 }
 
@@ -238,33 +258,46 @@ function nextQuestion() {
   if (questionIndex.value + 1 < questionList.value.length) {
     questionIndex.value++
   } else {
-    finalizarSimulado()
+    finished.value = true
+    toast.info('Simulado concluído! Revise e envie seu resultado.')
   }
 }
 
-/* ---------- Finalizar ---------- */
 async function finalizarSimulado() {
-  pararTimers()
-  finished.value = true
-  const acertos = questionList.value.filter(q => q.userAnswer === q.resposta_correta).length
-  const erros = questionList.value.length - acertos
-  // TODO: Quando getUsuario estiver pronto, substituir por o usuário logado
-  await registrarResultadoSimulado(config.simulado, {
-    cod_usuario: 1,
-    qtd_acertos: acertos,
-    qtd_erros: erros
-  })
-  alert(`Simulado finalizado!\nAcertos: ${acertos}\nErros: ${erros}`)
+  try {
+    const payload = {
+      cod_usuario: user.value?.cod_usuario,
+      qtd_acertos: totalAcertos.value,
+      qtd_erros: totalErros.value
+    }
+    await registrarResultadoSimulado(config.simulado, payload)
+    toast.success('Resultado enviado com sucesso!')
+  } catch (error) {
+    console.error(error)
+    toast.error('Erro ao enviar resultado.')
+  }
 }
 
-/* ---------- Logout ---------- */
+onMounted(async () => {
+  try {
+     const u = await getUsuarioLogado()
+    if (!u) {
+      router.replace({ name: 'Login' })
+      return
+    }
+    user.value = u
+  } catch (e) {
+    console.error('Falha ao obter usuário logado', e)
+    router.replace({ name: 'Login' })
+  }
+})
+
 async function onLogout() {
   try { await doLogout() }
-  finally { pararTimers(); router.replace({ name: 'Login', query: { logout: '1' } }) }
+  finally { router.replace({ name: 'Login', query: { logout: '1' } }) }
 }
 
 watch(() => route.fullPath, () => sidebarOpen.value = false)
-listarSimulados().then(data => simulados.value = data)
 </script>
 
 <style scoped>
@@ -285,22 +318,22 @@ listarSimulados().then(data => simulados.value = data)
   --c-gold:#D4AF37;
   --c-gold-soft:#FFF7DB;
 
-  --confirm-text:#064E3B; /* texto do botão Confirmar */
+  --confirm-text:#064E3B;
 }
 
 /* ===== Layout base ===== */
-.challenge{
-  min-height:100vh;
-  height:100vh;
-  background:#0d2a3f;
-  background-size:400% 400%;
-  animation:gradientAnimation 15s ease infinite;
-  padding:24px;
-  box-sizing:border-box;
-  position:relative;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
+.challenge {
+  min-height: 100vh;
+  height: auto;
+  background: #0d2a3f;
+  background-size: 400% 400%;
+  animation: gradientAnimation 15s ease infinite;
+  padding: 24px;
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 .challenge-top{
   display:flex;
@@ -328,14 +361,71 @@ listarSimulados().then(data => simulados.value = data)
 .container{ display:grid; grid-template-columns:minmax(240px,280px) 1fr; gap:16px; max-width:1300px; margin:0 auto; flex:1; width:100%; min-height:0; overflow:hidden; }
 .sidebar-slot{ height:100%; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
 .sidebar-slot > *{ flex:1; min-height:0; height:100%; }
-.center{ display:grid; grid-auto-rows:auto auto 1fr auto; min-width:0; } /* rodapé vira última linha */
+/* Overrides para caber 100% da viewport no desktop */
+.center {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1a3850;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.grid-panels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  padding: 0 16px 16px;
+  min-height: 0;
+  overflow: visible;
+}
+
+.panel-question {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: auto;
+  height: auto;
+  overflow: visible;
+}
+
+.question-card {
+  flex: initial;
+  min-height: fit-content;
+  max-height: none;
+  overflow: visible;
+}
+
+.panel-summary {
+  min-height: auto;
+  height: fit-content;
+  overflow: visible;
+}
 
 .header{ padding:12px 16px 0 16px; }
 .header h1{ color:#fff; margin:0; font-size:28px; line-height:1.2; }
 .header-sub{ margin:4px 0 0 0; color:#cfe8ff; }
 .panel{ background:var(--c-surface); border:1px solid var(--bd-soft); border-radius:16px; box-shadow:var(--shadow); }
 .panel-config{ padding:16px; margin-top:12px; }
-.panel-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px;color: #F1F5F9; }
+.panel-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  color:#F1F5F9;
+}
+.panel-actions{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  flex-wrap:wrap;
+}
+.panel-actions .btn-config{
+  padding:10px 14px;
+  border-radius:8px;
+}
 .panel-top h2{ margin:0; color:var(--c-text); }
 .panel-sub{ margin:4px 0 0 0; color:#999b9e; }
 
@@ -352,6 +442,15 @@ listarSimulados().then(data => simulados.value = data)
 .btn-config:hover{ background-color:#00471a; transform:translateY(-1px); box-shadow:0 10px 24px rgba(22,163,74,.30); }
 .btn-config:active{ transform:translateY(0); }
 
+.question-card .success-msg{
+  color: #fff;
+  margin-top: 8px;
+}
+
+.panel-summary .btn-finish{
+  margin-top: 12px;
+}
+
 /* ===== Grid ===== */
 .grid-panels{ display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-top:16px; min-width:0; padding:0 16px; }
 .panel-question{ padding:16px; }
@@ -363,32 +462,116 @@ listarSimulados().then(data => simulados.value = data)
 .dot{ width:10px; height:10px; background:currentColor; border-radius:50%; display:inline-block; }
 
 /* ===== Questão / opções ===== */
-.question-card{ background:#79787869; border:1px solid var(--bd-soft); border-radius:12px; padding:16px; }
+.question-card {
+  background: #79787869;
+  border: 1px solid var(--bd-soft);
+  border-radius: 12px;
+  padding: 16px;
+  flex: 1;
+  min-height: fit-content;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.question-card::-webkit-scrollbar {
+  width: 8px;
+}
+.question-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
 .question-title{ margin:0 0 12px 0; color:#111827; }
 
-.options{ display:grid; gap:10px; }
-.option{
-  display:flex; align-items:center; gap:10px;
-  border:1px solid var(--bd-soft); border-radius:10px;
-  padding:12px 14px; background:#FFFFFF; cursor:pointer;
-  transition:border-color .2s ease, box-shadow .2s ease, background .2s ease;
+.simulado-title,
+.materia-label {
+  color: #ffffff !important;
 }
-.option input{ display:none; }
 
-.opt-key{
-  width:32px; height:32px; border-radius:50%;
-  display:grid; place-items:center; background:#e5e7eb;
-  font-weight:800; color:#111827;
+.ano-questao {
+  color: #e5e7eb !important;
+  font-weight: 500;
 }
-.option.selected{
-  border-color:var(--c-gold);
-  background:var(--c-gold-soft);
-  box-shadow:0 0 0 3px rgba(212,175,55,.18);
+
+.question-title {
+  color: #ffffff !important;
 }
-.option.selected .opt-key{
-  background:#FFF1BF; color:#c9a33a; border:2px solid var(--c-gold);
+
+/* ===== Lista de alternativas ===== */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-grow: 1;
+  flex-shrink: 1;
+  overflow-y: auto;
+  max-height: calc(100vh - 380px); /* 🔹 adapta dinamicamente conforme a altura da tela */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  padding-right: 4px;
 }
-.opt-text{ color:#111827; }
+
+.options::-webkit-scrollbar {
+  width: 8px;
+}
+.options::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+/* ===== Cada alternativa ===== */
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  word-wrap: break-word;
+  white-space: normal;
+}
+
+.option:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.option input {
+  display: none;
+}
+
+.opt-key {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.15);
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.opt-text {
+  color: #f9fafb;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.option.selected {
+  background: rgba(74, 222, 128, 0.25);
+  border-color: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3);
+}
+
+.option.selected .opt-key {
+  background: #4ade80;
+  color: #0f172a;
+}
 
 /* Ações (apenas 2 botões) */
 .actions-row{
@@ -397,8 +580,20 @@ listarSimulados().then(data => simulados.value = data)
 .actions-row{ flex-shrink:0; }
 
 /* ===== Resumo ===== */
-.panel-summary{ padding:12px; color:#000; background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.12); }
-.panel-summary h3{ margin:0 0 8px 0; color:#fff; }
+.panel-summary {
+  padding:12px;
+  background:rgba(255,255,255,.06);
+  border-color:rgba(255,255,255,.12);
+  color:#fff;
+}
+.panel-summary h3 { margin-bottom:8px; }
+.summary-list {
+  list-style:none;
+  display:grid;
+  gap:6px;
+  padding:0;
+  margin:0;
+}
 .summary-list{ list-style:none; margin:0; padding:0; display:grid; gap:6px; }
 .summary-list li{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; background:rgba(255,255,255,.08); border-radius:8px; }
 .summary-list li span{ color:#cfe8ff; }

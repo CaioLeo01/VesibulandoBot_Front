@@ -26,8 +26,6 @@ const routes = [
   { path: '/admin', name: 'Admin', component: AdminView, meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
 
-  { path: '/admin/configurar-simulado', name: 'ConfigurarSimulado', component: ConfigurarSimuladoView, meta: { requiresAuth: true } },
-
   // criar senha após login com Google
   { 
   path: '/criar-senha',
