@@ -109,6 +109,11 @@ function onNavigate() {
   emit('navigate')
 }
 
+function goToProfile() {
+  onNavigate()
+  router.push({ name: 'Profile' })
+}
+
 async function onLogout() {
   if (logoutLoading.value) return
   logoutLoading.value = true
