@@ -73,6 +73,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { listarMaterias } from '@/services/materias.js'
+import { criarQuestao } from '@/services/questao.js'
+import { useToast } from 'vue-toastification'
+
+const toast = useToast()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false }
@@ -100,7 +104,7 @@ onMounted(async () => {
   try {
     materias.value = await listarMaterias()
   } catch (e) {
-    console.error('Erro ao carregar matérias:', e)
+    toast.error('Erro ao carregar matérias.', 'ERRO')
   }
 })
 
@@ -108,14 +112,42 @@ function close() {
   emit('update:modelValue', false)
 }
 
-function apply() {
-  emit('apply', {
-    materia: materiaSelecionada.value,
-    ano: anoSelecionado.value,
-    alternativas: alternativas.value,
-    respostaCorreta: respostaCorreta.value
-  })
-  close()
+async function apply() {
+  try {
+    if (!materiaSelecionada.value || !textoQuestao.value || !respostaCorreta.value) {
+      toast.warning('Preencha todos os campos obrigatórios.')
+      return;
+    }
+
+    const payload = {
+      tx_questao: textoQuestao.value,
+      ano_questao: anoSelecionado.value,
+      cod_materia: materiaSelecionada.value,
+      tx_resposta_correta: respostaCorreta.value,
+      alternativas: Object.entries(alternativas.value).map(([letra, texto]) => ({
+        tx_letra: letra,
+        tx_texto: texto || ''
+      }))
+    }
+
+    await criarQuestao(payload)
+
+    toast.success('Questão criada com sucesso!', 'SUCESSO')
+    emit('apply')
+    resetForm()
+    close()
+  } catch (error) {
+    console.error('Erro ao criar questão:', error)
+    toast.error('Erro ao salvar a questão.', 'ERRO')
+  }
+}
+
+function resetForm() {
+  materiaSelecionada.value = null
+  anoSelecionado.value = new Date().getFullYear()
+  textoQuestao.value = ''
+  respostaCorreta.value = null
+  alternativas.value = { A: '', B: '', C: '', D: '', E: '' }
 }
 </script>
 

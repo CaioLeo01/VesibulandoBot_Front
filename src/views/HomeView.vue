@@ -28,7 +28,8 @@
           <span class="go">Ver Performance →</span>
         </RouterLink>
 
-        <RouterLink class="card admin" :to="{ name: 'Admin' }">
+        <!-- Só mostra se for admin -->
+        <RouterLink v-if="isAdmin" class="card admin" :to="{ name: 'Admin' }">
           <div class="icon">🛠️</div>
           <h2>Administração</h2>
           <p>Gestão de conteúdos e usuários.</p>
@@ -40,13 +41,32 @@
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import { getCurrentUser } from '@/services/auth.js'
+
+const localUser = ref(null)
+
+async function loadUser() {
+  try {
+    localUser.value = await getCurrentUser(true)
+  } catch {
+    localUser.value = null
+  }
+}
+
+// flag de admin tolerante a boolean, number e string
+const isAdmin = computed(() => {
+  const v = localUser.value?.is_admin
+  return v === true || v === 1 || v === '1' || v === 'true'
+})
+
+onMounted(loadUser)
 </script>
 
 <style scoped>
 .home {
   min-height: 100vh;
-  /* mantém seu gradiente animado */
   background: linear-gradient(#081d41, #0b3c71);
   background-size: 400% 400%;
   animation: gradientAnimation 15s ease infinite;
@@ -62,16 +82,9 @@ import { RouterLink } from 'vue-router'
   100% { background-position: 0% 50%; }
 }
 
-.wrap {
-  width: 100%;
-  max-width: 1100px;
-}
+.wrap { width: 100%; max-width: 1100px; }
 
-.head {
-  text-align: center;
-  color: #ffffff;
-  margin-bottom: 20px;
-}
+.head { text-align: center; color: #ffffff; margin-bottom: 20px; }
 .head h1 { margin: 0 0 6px; }
 .head p { opacity: .9; margin: 0; }
 
@@ -105,16 +118,12 @@ import { RouterLink } from 'vue-router'
   box-shadow: 0 10px 32px rgba(0,0,0,.12);
   background: rgb(186, 192, 199);
 }
+
 .icon { font-size: 28px; }
 h2 { margin: 0; }
 p { margin: 0; color: #374151; }
-.go {
-  margin-top: 6px;
-  font-weight: 700;
-  color: #111827;
-}
+.go { margin-top: 6px; font-weight: 700; color: #111827; }
 
-/* cores de destaque sutis por modo */
 .card.study { border-left: 6px solid #2555a0; }
 .card.challenge { border-left: 6px solid #1c8a8c; }
 .card.performance { border-left: 6px solid #2154a5; }

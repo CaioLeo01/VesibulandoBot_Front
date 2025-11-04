@@ -11,6 +11,8 @@
       <div class="email">{{ user?.email }}</div>
     </div>
 
+
+
     <nav class="nav">
       <RouterLink class="link" :to="{ name: 'Study' }" @click="onNavigate">
         <i class="fa-solid fa-book-open"></i>
@@ -24,7 +26,7 @@
         <i class="fa-solid fa-chart-line"></i>
         <span>Performance</span>
       </RouterLink>
-      <RouterLink class="link" :to="{ name: 'Admin' }" @click="onNavigate">
+      <RouterLink v-if="isAdmin" class="link" :to="{ name: 'Admin' }" @click="onNavigate">
         <i class="fa-solid fa-cog"></i>
         <span>Administração</span>
       </RouterLink>
@@ -44,6 +46,11 @@ import { getCurrentUser, logout } from '../../services/auth.js'
 
 const props = defineProps({
   user: { type: Object, default: null }
+})
+
+const isAdmin = computed(() => {
+  const v = user.value?.is_admin
+  return v === true || v === 1 || v === '1' || v === 'true'
 })
 
 const emit = defineEmits(['logout', 'navigate'])

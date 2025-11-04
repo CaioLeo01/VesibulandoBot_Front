@@ -73,6 +73,16 @@ const sending = ref(false)
 const sidebarOpen = ref(false)
 const logo = logoUrl
 
+// 🔹 Respostas simuladas das perguntas rápidas
+const autoAnswers = {
+  'Explique fotossintese em 3 passos.': '1️⃣ As plantas absorvem luz solar e dióxido de carbono. 2️⃣ Transformam a energia luminosa em química. 3️⃣ Produzem glicose e liberam oxigênio 🌿.',
+  'Como calcular a media ponderada?': 'Some o produto de cada valor pelo seu peso e divida pela soma dos pesos: (v₁·p₁ + v₂·p₂ + ...)/(p₁ + p₂ + ...).',
+  'Qual a diferenca entre mitose e meiose?': 'Mitose gera 2 células idênticas (crescimento e reparo). Meiose gera 4 células diferentes com metade do DNA (reprodução).',
+  'Dicas para redacao nota 1000.': '📝 Tenha tese clara, argumente com repertório sociocultural, mantenha coesão e conclua com proposta de intervenção concreta.',
+  'Resumo da Revolucao Francesa.': 'Começou em 1789 contra os privilégios da nobreza. Leis igualitárias, queda da monarquia e avanço dos direitos civis 🇫🇷.',
+  'Como converter km/h para m/s?': 'Basta dividir o valor em km/h por 3,6. Ex: 72 km/h ÷ 3,6 = 20 m/s ⚙️.'
+}
+
 onMounted(async () => {
   const currentUser = await getCurrentUser()
   if (!currentUser) {
@@ -118,10 +128,11 @@ async function handleSend(text) {
   sending.value = true
 
   try {
-    const reply = await sendMessageToBot(clean)
+    // 🔸 Durante o desenvolvimento, ainda sem IA
+    const reply = 'Ainda estou aprendendo a responder isso! 🤖'
     messages.value.push({ from: 'bot', text: reply, at: Date.now() })
   } catch (error) {
-    console.error('Erro ao enviar mensagem para o bot', error)
+    console.error('Erro ao enviar mensagem', error)
     messages.value.push({
       from: 'bot',
       text: 'Não consegui responder agora. Tente novamente em instantes.',
@@ -132,8 +143,32 @@ async function handleSend(text) {
   }
 }
 
+// 🔹 Clique nas perguntas rápidas com resposta automática
 function handleQuickPick(text) {
-  handleSend(text)
+  const clean = formatUserText(text)
+  if (!clean) return
+
+  // Exibe a pergunta do usuário
+  messages.value.push({ from: 'user', text: clean, at: Date.now() })
+
+  // Resposta automática, se existir no dicionário
+  const answer = autoAnswers[clean]
+  if (answer) {
+    setTimeout(() => {
+      messages.value.push({
+        from: 'bot',
+        text: answer,
+        at: Date.now(),
+      })
+    }, 500) // leve delay para parecer natural
+  } else {
+    // fallback
+    messages.value.push({
+      from: 'bot',
+      text: 'Ainda estou aprendendo essa resposta. 😊',
+      at: Date.now(),
+    })
+  }
 }
 
 async function onLogout() {

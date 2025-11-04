@@ -10,6 +10,7 @@ import AdminView from '../views/AdminView.vue'
 import ProfileView from '../views/ProfileView.vue'
 
 
+
 import { getCurrentUser } from '@/services/auth'
 
 const routes = [
@@ -24,7 +25,7 @@ const routes = [
   { path: '/performance', name: 'Performance', component: PerformanceView, meta: { requiresAuth: true } },
   { path: '/admin', name: 'Admin', component: AdminView, meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: ProfileView, meta: { requiresAuth: true } },
-  
+
   // criar senha após login com Google
   { 
   path: '/criar-senha',

@@ -28,9 +28,16 @@
                 Escolha um simulado disponível e comece agora mesmo seu treino!
               </p>
             </div>
-            <button class="btn btn-config" @click="openSelector">
-              Selecionar Desafio
-            </button>
+
+            <!-- agrupa os botões para controlar o gap -->
+            <div class="panel-actions">
+              <button class="btn btn-config" @click="showAlunoModal = true">
+                Gerar Desafio
+              </button>
+              <button class="btn btn-config" @click="openSelector">
+                Selecionar Desafio
+              </button>
+            </div>
           </header>
         </section>
 
@@ -81,7 +88,9 @@
               <h4 class="question-title">
                 {{ finished ? 'Simulado concluído!' : 'Selecione um simulado para começar.' }}
               </h4>
-              <p v-if="finished">Seus resultados foram enviados com sucesso!</p>
+              <p v-if="finished" class="success-msg">
+                Seus resultados foram registrados, aperte para finalizar!
+              </p>
             </article>
           </div>
 
@@ -103,18 +112,27 @@
       </div>
     </div>
 
-    <!-- Modal -->
-    <SelecionarChallengeModal v-model="showSelector" @selecionado="applySelection" />
+    <SelecionarChallengeModal
+      v-model="showSelector"
+      @selecionado="applySelection"
+    />
+
+    <AlunoChallengeConfigModal
+      v-model="showAlunoModal"
+      @salvo="onAlunoSimuladoGerado"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import SelecionarChallengeModal from '@/components/challenge/SelecionarChallengeModal.vue'
+import AlunoChallengeConfigModal from '@/components/challenge/AlunoChallengeConfigModal.vue'
 import { listarQuestoesSimulado, registrarResultadoSimulado } from '@/services/simulado.js'
 import { logout as doLogout } from '@/services/auth.js'
+import { getUsuarioLogado } from '@/services/usuario.js'
 import logoUrl from '../assets/Icone.ico'
 import { useToast } from 'vue-toastification'
 
@@ -123,10 +141,10 @@ const router = useRouter()
 const route = useRoute()
 const sidebarOpen = ref(false)
 const logo = logoUrl
-
-function openSidebar() { sidebarOpen.value = true }
+const user = ref(null)
 
 const showSelector = ref(false)
+const showAlunoModal = ref(false)
 const isConfigured = ref(false)
 const loading = ref(false)
 const finished = ref(false)
@@ -147,8 +165,38 @@ const currentQuestion = computed(() => questionList.value[questionIndex.value] |
 const labelSimulado = computed(() => config.simuladoLabel || '—')
 const labelMateria = computed(() => config.materiaLabel || '—')
 
+function openSidebar() { sidebarOpen.value = true }
+
 function openSelector() {
   showSelector.value = true
+}
+
+async function onAlunoSimuladoGerado(sim) {
+  try {
+    config.simulado = sim?.cod_simulado ?? null
+    config.simuladoLabel = sim?.titulo ?? 'Simulado'
+    config.materiaLabel = Array.isArray(sim?.nomes_materias) && sim.nomes_materias.length
+      ? sim.nomes_materias.join(', ')
+      : '—'
+
+    if (!config.simulado) {
+      toast.error('Não foi possível identificar o simulado criado.')
+      return
+    }
+
+    isConfigured.value = true
+    finished.value = false
+    totalAcertos.value = 0
+    totalErros.value = 0
+
+    await carregarQuestoes()
+    toast.success('Simulado gerado e carregado!')
+  } catch (e) {
+    console.error(e)
+    toast.error('Falha ao carregar o simulado gerado.')
+  } finally {
+    showAlunoModal.value = false
+  }
 }
 
 async function applySelection(simulado) {
@@ -218,7 +266,7 @@ function nextQuestion() {
 async function finalizarSimulado() {
   try {
     const payload = {
-      cod_usuario: 1, // TODO: substituir pelo usuário logado
+      cod_usuario: user.value?.cod_usuario,
       qtd_acertos: totalAcertos.value,
       qtd_erros: totalErros.value
     }
@@ -230,13 +278,25 @@ async function finalizarSimulado() {
   }
 }
 
-/* Logout */
+onMounted(async () => {
+  try {
+     const u = await getUsuarioLogado()
+    if (!u) {
+      router.replace({ name: 'Login' })
+      return
+    }
+    user.value = u
+  } catch (e) {
+    console.error('Falha ao obter usuário logado', e)
+    router.replace({ name: 'Login' })
+  }
+})
+
 async function onLogout() {
   try { await doLogout() }
   finally { router.replace({ name: 'Login', query: { logout: '1' } }) }
 }
 
-/* Fechar sidebar ao trocar rota */
 watch(() => route.fullPath, () => sidebarOpen.value = false)
 </script>
 
@@ -258,22 +318,22 @@ watch(() => route.fullPath, () => sidebarOpen.value = false)
   --c-gold:#D4AF37;
   --c-gold-soft:#FFF7DB;
 
-  --confirm-text:#064E3B; /* texto do botão Confirmar */
+  --confirm-text:#064E3B;
 }
 
 /* ===== Layout base ===== */
-.challenge{
-  min-height:100vh;
-  height:100vh;
-  background:#0d2a3f;
-  background-size:400% 400%;
-  animation:gradientAnimation 15s ease infinite;
-  padding:24px;
-  box-sizing:border-box;
-  position:relative;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
+.challenge {
+  min-height: 100vh;
+  height: auto;
+  background: #0d2a3f;
+  background-size: 400% 400%;
+  animation: gradientAnimation 15s ease infinite;
+  padding: 24px;
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 .challenge-top{
   display:flex;
@@ -301,14 +361,71 @@ watch(() => route.fullPath, () => sidebarOpen.value = false)
 .container{ display:grid; grid-template-columns:minmax(240px,280px) 1fr; gap:16px; max-width:1300px; margin:0 auto; flex:1; width:100%; min-height:0; overflow:hidden; }
 .sidebar-slot{ height:100%; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
 .sidebar-slot > *{ flex:1; min-height:0; height:100%; }
-.center{ display:grid; grid-auto-rows:auto auto 1fr auto; min-width:0; } /* rodapé vira última linha */
+/* Overrides para caber 100% da viewport no desktop */
+.center {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1a3850;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.grid-panels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  padding: 0 16px 16px;
+  min-height: 0;
+  overflow: visible;
+}
+
+.panel-question {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: auto;
+  height: auto;
+  overflow: visible;
+}
+
+.question-card {
+  flex: initial;
+  min-height: fit-content;
+  max-height: none;
+  overflow: visible;
+}
+
+.panel-summary {
+  min-height: auto;
+  height: fit-content;
+  overflow: visible;
+}
 
 .header{ padding:12px 16px 0 16px; }
 .header h1{ color:#fff; margin:0; font-size:28px; line-height:1.2; }
 .header-sub{ margin:4px 0 0 0; color:#cfe8ff; }
 .panel{ background:var(--c-surface); border:1px solid var(--bd-soft); border-radius:16px; box-shadow:var(--shadow); }
 .panel-config{ padding:16px; margin-top:12px; }
-.panel-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px;color: #F1F5F9; }
+.panel-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  color:#F1F5F9;
+}
+.panel-actions{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  flex-wrap:wrap;
+}
+.panel-actions .btn-config{
+  padding:10px 14px;
+  border-radius:8px;
+}
 .panel-top h2{ margin:0; color:var(--c-text); }
 .panel-sub{ margin:4px 0 0 0; color:#999b9e; }
 
@@ -325,6 +442,15 @@ watch(() => route.fullPath, () => sidebarOpen.value = false)
 .btn-config:hover{ background-color:#00471a; transform:translateY(-1px); box-shadow:0 10px 24px rgba(22,163,74,.30); }
 .btn-config:active{ transform:translateY(0); }
 
+.question-card .success-msg{
+  color: #fff;
+  margin-top: 8px;
+}
+
+.panel-summary .btn-finish{
+  margin-top: 12px;
+}
+
 /* ===== Grid ===== */
 .grid-panels{ display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-top:16px; min-width:0; padding:0 16px; }
 .panel-question{ padding:16px; }
@@ -336,32 +462,116 @@ watch(() => route.fullPath, () => sidebarOpen.value = false)
 .dot{ width:10px; height:10px; background:currentColor; border-radius:50%; display:inline-block; }
 
 /* ===== Questão / opções ===== */
-.question-card{ background:#79787869; border:1px solid var(--bd-soft); border-radius:12px; padding:16px; }
+.question-card {
+  background: #79787869;
+  border: 1px solid var(--bd-soft);
+  border-radius: 12px;
+  padding: 16px;
+  flex: 1;
+  min-height: fit-content;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.question-card::-webkit-scrollbar {
+  width: 8px;
+}
+.question-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
 .question-title{ margin:0 0 12px 0; color:#111827; }
 
-.options{ display:grid; gap:10px; }
-.option{
-  display:flex; align-items:center; gap:10px;
-  border:1px solid var(--bd-soft); border-radius:10px;
-  padding:12px 14px; background:#FFFFFF; cursor:pointer;
-  transition:border-color .2s ease, box-shadow .2s ease, background .2s ease;
+.simulado-title,
+.materia-label {
+  color: #ffffff !important;
 }
-.option input{ display:none; }
 
-.opt-key{
-  width:32px; height:32px; border-radius:50%;
-  display:grid; place-items:center; background:#e5e7eb;
-  font-weight:800; color:#111827;
+.ano-questao {
+  color: #e5e7eb !important;
+  font-weight: 500;
 }
-.option.selected{
-  border-color:var(--c-gold);
-  background:var(--c-gold-soft);
-  box-shadow:0 0 0 3px rgba(212,175,55,.18);
+
+.question-title {
+  color: #ffffff !important;
 }
-.option.selected .opt-key{
-  background:#FFF1BF; color:#c9a33a; border:2px solid var(--c-gold);
+
+/* ===== Lista de alternativas ===== */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-grow: 1;
+  flex-shrink: 1;
+  overflow-y: auto;
+  max-height: calc(100vh - 380px); /* 🔹 adapta dinamicamente conforme a altura da tela */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  padding-right: 4px;
 }
-.opt-text{ color:#111827; }
+
+.options::-webkit-scrollbar {
+  width: 8px;
+}
+.options::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+/* ===== Cada alternativa ===== */
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  word-wrap: break-word;
+  white-space: normal;
+}
+
+.option:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.option input {
+  display: none;
+}
+
+.opt-key {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.15);
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.opt-text {
+  color: #f9fafb;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.option.selected {
+  background: rgba(74, 222, 128, 0.25);
+  border-color: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3);
+}
+
+.option.selected .opt-key {
+  background: #4ade80;
+  color: #0f172a;
+}
 
 /* Ações (apenas 2 botões) */
 .actions-row{
@@ -370,8 +580,20 @@ watch(() => route.fullPath, () => sidebarOpen.value = false)
 .actions-row{ flex-shrink:0; }
 
 /* ===== Resumo ===== */
-.panel-summary{ padding:12px; color:#000; background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.12); }
-.panel-summary h3{ margin:0 0 8px 0; color:#fff; }
+.panel-summary {
+  padding:12px;
+  background:rgba(255,255,255,.06);
+  border-color:rgba(255,255,255,.12);
+  color:#fff;
+}
+.panel-summary h3 { margin-bottom:8px; }
+.summary-list {
+  list-style:none;
+  display:grid;
+  gap:6px;
+  padding:0;
+  margin:0;
+}
 .summary-list{ list-style:none; margin:0; padding:0; display:grid; gap:6px; }
 .summary-list li{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; background:rgba(255,255,255,.08); border-radius:8px; }
 .summary-list li span{ color:#cfe8ff; }
