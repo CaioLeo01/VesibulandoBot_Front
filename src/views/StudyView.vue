@@ -129,7 +129,7 @@ async function handleSend(text) {
 
   try {
     // 🔸 Durante o desenvolvimento, ainda sem IA
-    const reply = 'Ainda estou aprendendo a responder isso! 🤖'
+    const reply = await sendMessageToBot(clean)
     messages.value.push({ from: 'bot', text: reply, at: Date.now() })
   } catch (error) {
     console.error('Erro ao enviar mensagem', error)
