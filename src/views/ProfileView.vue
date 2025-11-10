@@ -42,7 +42,7 @@
           <div class="profile-content">
             <div class="profile-header">
               <div class="avatar-fallback">
-                {{ user.nome?.charAt(0) || 'U' }}
+                {{ initials }}
               </div>
               <div class="profile-info">
                 <h3>{{ user.nome || user.nome_usuario || 'Usuário' }}</h3>
