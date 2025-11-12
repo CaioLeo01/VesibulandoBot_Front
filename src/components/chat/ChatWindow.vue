@@ -2,10 +2,17 @@
   <section class="chat">
     <header class="chat-header">
       <h2>Chat</h2>
-      <span class="status" :class="status">
-        <i v-if="status === 'digitando'" class="fa-solid fa-comment-dots"></i>
-        {{ label }}
-      </span>
+
+      <div class="header-right">
+        <button class="export-btn" @click="exportConversation">
+          Exportar
+        </button>
+
+        <span class="status" :class="status">
+          <i v-if="status === 'digitando'" class="fa-solid fa-comment-dots"></i>
+          {{ label }}
+        </span>
+      </div>
     </header>
 
     <div class="messages" ref="listEl">
@@ -46,7 +53,7 @@ const emit = defineEmits(['send'])
 
 const draft = ref('')
 const listEl = ref(null)
-const status = ref('enviado') // 'digitando' | 'enviando' | 'enviado'
+const status = ref('enviado')
 
 function submit() {
   if (!draft.value) return
@@ -91,6 +98,21 @@ const label = computed(() => {
     default: return 'Enviado'
   }
 })
+
+function exportConversation() {
+  if (!props.messages.length) return alert('Nenhuma conversa para exportar.')
+  const content = props.messages
+    .map(m => (m.from === 'user' ? `🧑 Aluno: ${m.text}` : `🤖 IA: ${m.text}`))
+    .join('\n\n')
+
+  const blob = new Blob([content], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `conversa_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>
@@ -116,11 +138,35 @@ const label = computed(() => {
   flex-shrink: 0;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .chat-header h2 {
   margin: 0;
   color: #374151;
   font-size: 18px;
   font-weight: 600;
+}
+
+/* Botão de exportar no topo */
+.export-btn {
+  background: #1c3d56;
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover {
+  background: #2d4a63;
+  transform: translateY(-1px);
 }
 
 .status {
@@ -132,17 +178,9 @@ const label = computed(() => {
   color: #6b7280;
 }
 
-.status.digitando {
-  color: #2563eb;
-}
-
-.status.enviando {
-  color: #f59e0b;
-}
-
-.status.enviado {
-  color: #10b981;
-}
+.status.digitando { color: #2563eb; }
+.status.enviando { color: #f59e0b; }
+.status.enviado { color: #10b981; }
 
 .messages {
   flex: 1;
@@ -154,18 +192,9 @@ const label = computed(() => {
   min-height: 0;
 }
 
-.msg {
-  display: flex;
-  width: 100%;
-}
-
-.msg.user {
-  justify-content: flex-end;
-}
-
-.msg.bot {
-  justify-content: flex-start;
-}
+.msg { display: flex; width: 100%; }
+.msg.user { justify-content: flex-end; }
+.msg.bot { justify-content: flex-start; }
 
 .bubble {
   display: inline-block;
@@ -177,7 +206,6 @@ const label = computed(() => {
   max-width: 75%;
   min-width: 60px;
 }
-
 .msg.user .bubble {
   background: #069483;
   color: white;
@@ -216,15 +244,8 @@ const label = computed(() => {
   transition: border-color 0.2s ease;
 }
 
-.composer input:focus {
-  border-color: #1c3d56;
-}
-
-.composer input:disabled {
-  background-color: #f9fafb;
-  color: #6b7280;
-  cursor: not-allowed;
-}
+.composer input:focus { border-color: #1c3d56; }
+.composer input:disabled { background-color: #f9fafb; color: #6b7280; cursor: not-allowed; }
 
 .composer button {
   background: #1c3d56;
@@ -237,94 +258,14 @@ const label = computed(() => {
   transition: all 0.2s ease;
   white-space: nowrap;
 }
+.composer button:hover:not(:disabled) { background: #2d4a63; transform: translateY(-1px); }
+.composer button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-.composer button:hover:not(:disabled) {
-  background: #2d4a63;
-  transform: translateY(-1px);
-}
-
-.composer button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-@media (max-width: 900px) {
-  .chat {
-    border-radius: 12px;
-    padding: 12px;
-  }
-
-  .messages {
-    padding: 12px 4px;
-    gap: 10px;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  .bubble {
-    max-width: 85%;
-    padding: 10px 14px;
-    border-radius: 14px;
-  }
-
-  .composer {
-    flex-direction: column;
-    gap: 10px;
-    padding-top: 12px;
-  }
-
-  .composer button {
-    width: 100%;
-    padding: 14px 24px;
-  }
-}
-
-@media (max-width: 480px) {
-  .chat {
-    padding: 10px;
-  }
-
-  .bubble {
-    max-width: 90%;
-    padding: 8px 12px;
-  }
-
-  .composer input {
-    padding: 10px 14px;
-  }
-
-  .composer button {
-    padding: 12px 20px;
-  }
-}
-
-/* Scrollbar customization para WebKit (Chrome, Safari, Edge) */
-.messages::-webkit-scrollbar {
-  width: 8px;
-}
-
-.messages::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-}
-
-.messages::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.messages::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-.messages::-webkit-scrollbar-thumb:active {
-  background: #64748b;
-}
-
-/* Para Firefox */
-.messages {
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 rgba(0, 0, 0, 0.05);
-}
+/* Scrollbar */
+.messages::-webkit-scrollbar { width: 8px; }
+.messages::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); border-radius: 4px; }
+.messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.messages::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.messages::-webkit-scrollbar-thumb:active { background: #64748b; }
+.messages { scrollbar-width: thin; scrollbar-color: #cbd5e1 rgba(0, 0, 0, 0.05); }
 </style>
