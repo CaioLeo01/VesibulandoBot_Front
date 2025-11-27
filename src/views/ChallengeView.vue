@@ -242,7 +242,11 @@ function confirmAnswer() {
   currentQuestion.value.userAnswer = selectedOption.value
   currentQuestion.value.acertou = acertou
 
-  toast.success(acertou ? 'Acertou! 🎯' : 'Errou 😞')
+  if (acertou) {
+    toast.success('Acertou! 🎯')
+  } else {
+    toast.error('Errou 😞')
+  }
   nextQuestion()
 }
 
