@@ -54,12 +54,25 @@
             <small class="hint">Selecione uma ou mais matérias</small>
           </div>
 
-          <!-- Questões -->
-          <div v-if="questoesFiltradas.length" class="field">
-            <label>Selecione até 40 questões</label>
+          
+          <!-- LISTAS DE QUESTÕES SEPARADAS -->
+          <!-- Botão de Importar do ENEM -->
+          <div class="field">
+            <button class="btn btn-primary" @click="importarQuestoesEnem" :disabled="!local.materiasSelecionadas.length || importando">
+              <span v-if="importando">Importando...</span>
+              <span v-else>Importar Questões do ENEM</span>
+            </button>
+            <small class="hint">Selecione as matérias para importar as questões do ENEM do ano de 2023.</small>
+          </div>
+
+          <div v-if="local.materiasSelecionadas.length" class="field">
+
+            <!-- PROFESSOR -->
+            <h3 class="secao-titulo">Questões Adicionadas por Professores</h3>
+
             <div class="questoes-list">
               <label
-                v-for="q in questoesFiltradas"
+                v-for="q in questoesProfessor"
                 :key="q.cod_questao"
                 class="checkbox-line"
               >
@@ -72,10 +85,33 @@
                 <span>{{ q.tx_questao }}</span>
               </label>
             </div>
-            <p class="hint">
-              {{ local.questoesSelecionadas.length }}/40 selecionadas
-            </p>
+
+            <!-- ENEM -->
+            <h3 class="secao-titulo">Questões ENEM</h3>
+
+            <div class="questoes-list">
+              <label
+                v-for="q in questoesEnem"
+                :key="q.cod_questao"
+                class="checkbox-line"
+              >
+                <input
+                  type="checkbox"
+                  :value="q.cod_questao"
+                  v-model="local.questoesSelecionadas"
+                  :disabled="isLimiteAtingido && !local.questoesSelecionadas.includes(q.cod_questao)"
+                />
+
+                <span>
+                  <span class="tag-enem">ENEM</span>
+                  {{ q.tx_questao }}
+                </span>
+              </label>
+            </div>
+
+            <p class="hint">{{ local.questoesSelecionadas.length }}/40 selecionadas</p>
           </div>
+
         </section>
 
         <!-- Rodapé -->
@@ -97,8 +133,11 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import { listarMaterias } from '@/services/materias.js'
-import { listarQuestoesPorMateria } from '@/services/questao.js'
+import { listarQuestoesPorMateria, importarEnem } from '@/services/questao.js'
 import { criarSimulado, adicionarQuestaoSimulado } from '@/services/simulado.js'
+import { useToast } from 'vue-toastification'
+
+const toast = useToast()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -106,8 +145,9 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'salvo'])
 
 const materias = ref([])
-const questoes = ref([])
-const carregando = ref(false)
+const questoesProfessor = ref([])
+const questoesEnem = ref([])
+const importando = ref(false)
 
 const local = reactive({
   titulo: '',
@@ -116,14 +156,34 @@ const local = reactive({
   questoesSelecionadas: [],
 })
 
-const questoesFiltradas = computed(() => {
-  if (!local.materiasSelecionadas.length) return []
-  return questoes.value.filter(q =>
-    local.materiasSelecionadas.includes(q.cod_materia)
-  )
-})
+/* ======== Carregar Matérias ======== */
+async function carregarMaterias() {
+  materias.value = await listarMaterias()
+}
 
+/* ======== Carregar Questões de TODAS as matérias selecionadas ======== */
+async function carregarQuestoes() {
+  questoesProfessor.value = []
+  questoesEnem.value = []
+
+  for (const cod_materia of local.materiasSelecionadas) {
+    try {
+      const data = await listarQuestoesPorMateria(cod_materia)
+
+      // Adicionar sem duplicar
+      questoesProfessor.value.push(...(data.professor ?? []))
+      questoesEnem.value.push(...(data.enem ?? []))
+
+    } catch (e) {
+      console.error(e)
+      toast.error("Erro ao carregar questões.")
+    }
+  }
+}
+
+/* ======== Limite ======== */
 const isLimiteAtingido = computed(() => local.questoesSelecionadas.length >= 40)
+
 const podeSalvar = computed(() =>
   local.titulo.trim() &&
   local.descricao.trim() &&
@@ -132,35 +192,9 @@ const podeSalvar = computed(() =>
   local.questoesSelecionadas.length <= 40
 )
 
-/* === Métodos === */
-async function carregarMaterias() {
-  try {
-    carregando.value = true
-    materias.value = await listarMaterias()
-  } catch (e) {
-    console.error('❌ Erro ao carregar matérias:', e)
-  } finally {
-    carregando.value = false
-  }
-}
-
-async function carregarQuestoes() {
-  try {
-    questoes.value = []
-    for (const cod of local.materiasSelecionadas) {
-      const lista = await listarQuestoesPorMateria(cod)
-      if (Array.isArray(lista)) questoes.value.push(...lista)
-    }
-  } catch (e) {
-    console.error('❌ Erro ao carregar questões:', e)
-  }
-}
-
+/* ======== SALVAR ======== */
 async function salvar() {
   try {
-    carregando.value = true
-
-    // 🔹 Envia `cod_materias` (plural) conforme o backend novo
     const sim = await criarSimulado({
       titulo: local.titulo,
       descricao: local.descricao,
@@ -169,43 +203,62 @@ async function salvar() {
     })
 
     const idSimulado = sim?.cod_simulado
-    if (!idSimulado) {
-      alert('Erro ao criar simulado. Verifique o console.')
-      return
-    }
 
-    // 🔹 Adiciona as questões ao simulado
-    for (const cod_questao of local.questoesSelecionadas) {
-      await adicionarQuestaoSimulado(idSimulado, { cod_questao })
+    for (const cod of local.questoesSelecionadas) {
+      await adicionarQuestaoSimulado(idSimulado, { cod_questao: cod })
     }
 
     emit('salvo', sim)
     close()
+
   } catch (e) {
-    console.error('❌ Erro ao salvar simulado:', e)
-    alert('Erro ao salvar simulado. Veja o console para detalhes.')
-  } finally {
-    carregando.value = false
+    console.error("Erro ao salvar:", e)
+    toast.error("Erro ao salvar simulado.")
   }
 }
 
+/* ======== Importar Questões ENEM ======== */
+async function importarQuestoesEnem() {
+  if (!local.materiasSelecionadas.length) {
+    toast.warning('Selecione pelo menos uma matéria para importar as questões do ENEM.');
+    return;
+  }
+
+  importando.value = true;
+  try {
+    // Por enquanto, o ano está fixo em 2023, como solicitado.
+    const response = await importarEnem([2023], local.materiasSelecionadas);
+    toast.success(`${response[0].importadas} questões do ENEM importadas com sucesso!`);
+    // Recarregar as questões para exibir as novas
+    await carregarQuestoes();
+  } catch (error) {
+    console.error('Erro ao importar questões do ENEM:', error);
+    toast.error('Ocorreu um erro ao importar as questões do ENEM.');
+  } finally {
+    importando.value = false;
+  }
+}
+
+/* ======== Fechar ======== */
 function close() {
   emit('update:modelValue', false)
 }
 
+/* ======== Quando Abrir ======== */
 watch(() => props.modelValue, open => {
-  if (open) carregarMaterias()
-  else {
+  if (open) {
+    carregarMaterias()
+  } else {
     Object.assign(local, {
       titulo: '',
       descricao: '',
       materiasSelecionadas: [],
       questoesSelecionadas: [],
     })
-    questoes.value = []
   }
 })
 </script>
+
 
 <style scoped>
 .overlay {
@@ -248,6 +301,22 @@ watch(() => props.modelValue, open => {
   width: 32px;
   height: 32px;
   cursor: pointer;
+}
+.secao-titulo {
+  margin-top: 20px;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+.ta1g-enem {
+  background: #ffc107;
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-right: 6px;
+  font-weight: bold;
 }
 .modal-body {
   flex: 1;

@@ -26,6 +26,21 @@
             </div>
           </div>
           <div class="field-row">
+            <div class="field">
+              <label for="bncc">Código BNCC</label>
+              <select id="bncc" v-model="bnccSelecionado">
+                <option value="">Selecione...</option>
+                <option
+                  v-for="item in bnccList"
+                  :key="item.codigo"
+                  :value="item.codigo"
+                >
+                  {{ item.codigo }} – {{ item.descricao }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
             <div class="field full">
               <label for="tx-questao">Enunciado da Questão</label>
               <textarea
@@ -97,8 +112,104 @@ const alternativas = ref({
 })
 
 const respostaCorreta = ref(null)
-
 const textoQuestao = ref('')
+
+const bnccList = [
+  /* --- Linguagens e suas Tecnologias (LP, ART, ING, EF) --- */
+  { codigo:"EM13LP01", descricao:"Analisar e compreender textos multissemióticos, reconhecendo seus usos e funções sociais." },
+  { codigo:"EM13LP02", descricao:"Produzir textos orais, escritos e multissemióticos para diferentes propósitos e contextos." },
+  { codigo:"EM13LP03", descricao:"Analisar estratégias argumentativas em diferentes gêneros e mídias." },
+  { codigo:"EM13LP04", descricao:"Avaliar a credibilidade de fontes e combater a desinformação." },
+  { codigo:"EM13LP05", descricao:"Empregar processos de revisão e edição em textos." },
+  { codigo:"EM13LP06", descricao:"Compreender relações entre literatura, identidade, cultura e sociedade." },
+  { codigo:"EM13LP07", descricao:"Produzir textos literários autorais ou adaptados." },
+  { codigo:"EM13LP08", descricao:"Analisar obras literárias em diferentes contextos históricos e culturais." },
+  { codigo:"EM13LP09", descricao:"Apreciar produções estéticas e culturais diversas." },
+  { codigo:"EM13LP10", descricao:"Analisar criticamente discursos relacionados a temas contemporâneos." },
+
+  /* Artes */
+  { codigo:"EM13AR01", descricao:"Experimentar processos de criação artística em diferentes linguagens." },
+  { codigo:"EM13AR02", descricao:"Analisar obras artísticas considerando contexto histórico e social." },
+  { codigo:"EM13AR03", descricao:"Produzir obras autorais nas linguagens visuais, cênicas ou musicais." },
+  { codigo:"EM13AR04", descricao:"Dialogar criticamente com manifestações culturais diversas." },
+
+  /* Inglês */
+  { codigo:"EM13ING01", descricao:"Compreender textos orais e escritos em língua inglesa em diferentes contextos." },
+  { codigo:"EM13ING02", descricao:"Utilizar inglês em situações comunicativas diversas." },
+  { codigo:"EM13ING03", descricao:"Analisar aspectos culturais de países de língua inglesa." },
+  { codigo:"EM13ING04", descricao:"Produzir textos orais e escritos em inglês com clareza e adequação." },
+
+  /* Educação Física */
+  { codigo:"EM13EF01", descricao:"Analisar práticas corporais em diferentes contextos socioculturais." },
+  { codigo:"EM13EF02", descricao:"Praticar atividades corporais visando saúde e bem-estar." },
+  { codigo:"EM13EF03", descricao:"Compreender relações entre corpo, identidade e sociedade." },
+
+  /* --- Matemática e suas Tecnologias --- */
+  { codigo:"EM13MAT101", descricao:"Reconhecer e analisar padrões e regularidades." },
+  { codigo:"EM13MAT102", descricao:"Resolver problemas utilizando raciocínio lógico e algébrico." },
+  { codigo:"EM13MAT103", descricao:"Interpretar situações por meio de funções." },
+  { codigo:"EM13MAT104", descricao:"Compreender progressões e relações numéricas." },
+  { codigo:"EM13MAT201", descricao:"Resolver problemas que envolvam funções algébricas." },
+  { codigo:"EM13MAT202", descricao:"Modelar fenômenos utilizando funções." },
+  { codigo:"EM13MAT203", descricao:"Analisar gráficos e tabelas em diferentes contextos." },
+  { codigo:"EM13MAT301", descricao:"Compreender conceitos de geometria plana e espacial." },
+  { codigo:"EM13MAT302", descricao:"Resolver problemas com grandezas e medidas." },
+  { codigo:"EM13MAT303", descricao:"Analisar formas geométricas e transformações." },
+  { codigo:"EM13MAT401", descricao:"Interpretar e produzir argumentos estatísticos." },
+  { codigo:"EM13MAT402", descricao:"Aplicar probabilidade em situações reais." },
+  { codigo:"EM13MAT403", descricao:"Avaliar riscos e incertezas em problemas do cotidiano." },
+
+  /* --- Ciências da Natureza (Física, Química, Biologia) --- */
+  
+  /* Física */
+  { codigo:"EM13FIS101", descricao:"Compreender movimentos e suas representações." },
+  { codigo:"EM13FIS102", descricao:"Analisar interações e forças no cotidiano." },
+  { codigo:"EM13FIS201", descricao:"Aplicar conceitos de energia em situações diversas." },
+  { codigo:"EM13FIS202", descricao:"Compreender processos ondulatórios e propagação." },
+  { codigo:"EM13FIS301", descricao:"Analisar fenômenos eletromagnéticos." },
+  { codigo:"EM13FIS302", descricao:"Compreender tecnologias que utilizam eletricidade." },
+
+  /* Química */
+  { codigo:"EM13QUI101", descricao:"Compreender propriedades e transformações da matéria." },
+  { codigo:"EM13QUI102", descricao:"Analisar reações químicas em contextos variados." },
+  { codigo:"EM13QUI201", descricao:"Aplicar conceitos de química para resolver problemas ambientais." },
+  { codigo:"EM13QUI202", descricao:"Examinar compostos e suas aplicações cotidianas." },
+  { codigo:"EM13QUI301", descricao:"Avaliar impactos de processos químicos no ambiente." },
+
+  /* Biologia */
+  { codigo:"EM13BIO101", descricao:"Compreender mecanismos celulares e genéticos." },
+  { codigo:"EM13BIO102", descricao:"Analisar processos evolutivos e biodiversidade." },
+  { codigo:"EM13BIO201", descricao:"Compreender relações ecológicas." },
+  { codigo:"EM13BIO202", descricao:"Avaliar impactos humanos nos ecossistemas." },
+  { codigo:"EM13BIO301", descricao:"Compreender sistemas do corpo humano." },
+  { codigo:"EM13BIO302", descricao:"Relacionar hábitos de vida à saúde." },
+  { codigo:"EM13BIO303", descricao:"Avaliar tecnologias aplicadas à saúde e biotecnologia." },
+
+  /* --- Ciências Humanas (História, Geografia, Sociologia, Filosofia) --- */
+
+  /* História */
+  { codigo:"EM13CHS101", descricao:"Compreender temporalidades históricas e suas transformações." },
+  { codigo:"EM13CHS102", descricao:"Analisar processos históricos em diferentes contextos." },
+  { codigo:"EM13CHS103", descricao:"Relacionar fatos históricos a questões contemporâneas." },
+  { codigo:"EM13CHS104", descricao:"Analisar criticamente discursos e narrativas históricas." },
+
+  /* Geografia */
+  { codigo:"EM13CHS201", descricao:"Interpretar fenômenos naturais e sua relação com a sociedade." },
+  { codigo:"EM13CHS202", descricao:"Analisar dinâmicas territoriais e espaciais." },
+  { codigo:"EM13CHS203", descricao:"Compreender processos econômicos globais." },
+  { codigo:"EM13CHS204", descricao:"Avaliar problemas ambientais e suas causas." },
+
+  /* Sociologia */
+  { codigo:"EM13CHS301", descricao:"Compreender a formação das estruturas sociais." },
+  { codigo:"EM13CHS302", descricao:"Analisar relações de poder e desigualdade." },
+  { codigo:"EM13CHS303", descricao:"Avaliar fenômenos culturais e identitários." },
+
+  /* Filosofia */
+  { codigo:"EM13CHS401", descricao:"Refletir sobre questões éticas e morais." },
+  { codigo:"EM13CHS402", descricao:"Analisar argumentações filosóficas." },
+  { codigo:"EM13CHS403", descricao:"Compreender diferentes correntes de pensamento." },
+];
+const bnccSelecionado = ref("")
 
 onMounted(async () => {
   try {
@@ -124,6 +235,7 @@ async function apply() {
       ano_questao: anoSelecionado.value,
       cod_materia: materiaSelecionada.value,
       tx_resposta_correta: respostaCorreta.value,
+      bncc: bnccSelecionado.value,
       alternativas: Object.entries(alternativas.value).map(([letra, texto]) => ({
         tx_letra: letra,
         tx_texto: texto || ''
@@ -148,6 +260,7 @@ function resetForm() {
   textoQuestao.value = ''
   respostaCorreta.value = null
   alternativas.value = { A: '', B: '', C: '', D: '', E: '' }
+  bnccSelecionado.value = ""
 }
 </script>
 
@@ -270,9 +383,8 @@ function resetForm() {
   font-weight: 600;
 }
 
-.field select,
-.field textarea {
-  width: 95%;
+.field select {
+  width: 100%;
   padding: 10px 14px;
   border-radius: 12px;
   border:1px solid #2A4C70;
@@ -281,6 +393,22 @@ function resetForm() {
   font-size: 14px;
   resize: none;
   outline: none;
+}
+
+.field textarea {
+  width: 96%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border:1px solid #2A4C70;
+  background: #1E3A5F;
+  color: #ffffff;
+  font-size: 14px;
+  resize: none;
+  outline: none;
+}
+
+#bncc {
+  width: 100% !important;
 }
 
 .field textarea {
