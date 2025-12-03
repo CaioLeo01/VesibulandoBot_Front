@@ -319,7 +319,7 @@ onMounted(async () => {
 
 /* ===== Layout principal ===== */
 .challenge {
-  min-height: 100vh;
+  height: 100vh;
   background: #0d2a3f;
   background-size: 400% 400%;
   animation: gradientAnimation 15s ease infinite;
@@ -369,36 +369,38 @@ onMounted(async () => {
   backdrop-filter: blur(10px);
 }
 
+/* container ocupa o restante da tela, permitindo scroll interno */
 .container {
   display: grid;
-  grid-template-columns: minmax(240px, 280px) 1fr;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
   gap: 16px;
   max-width: 1300px;
   margin: 0 auto;
   flex: 1;
   width: 100%;
+  min-height: 0;
 }
 
-/* linha do filtro com espaçamento de 2px */
+/* linha do filtro com espacamento de 2px */
 .field-row.compact{
   display:flex;
   align-items:center;
   gap:2px;
-  flex-wrap:wrap; /* quebra bonitinho no mobile */
+  flex-wrap:wrap;
 }
 
-/* “Filtro:” inline e discreto */
+/* "Filtro:" inline e discreto */
 .inline-label{
   color:#fff;
   font-weight:700;
   font-size:14px;
-  margin-right:2px; /* mantém o padrão de 2px */
+  margin-right:2px;
 }
 
 /* select compacto */
 .select.compact{
   width:auto;
-  min-width:220px;   /* ajuste se quiser menor/maior */
+  min-width:220px;
   padding:8px 10px;
   border-radius:10px;
   border:1px solid #2A4C70;
@@ -408,25 +410,31 @@ onMounted(async () => {
   outline:none;
 }
 
-/* botões compactos com “2px” de separação herdado do gap */
+/* botoes compactos */
 .btn-config.compact{
   padding:8px 12px;
   border-radius:10px;
   font-weight:700;
 }
 
+/* Sidebar no tamanho padrao, com scroll proprio se crescer */
 .sidebar-slot {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
+/* Conteudo central: card que preenche e tem scroll interno */
 .center {
-  display: grid;
-  grid-auto-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   background: #1a3850;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* ===== Painel superior ===== */
@@ -459,7 +467,7 @@ onMounted(async () => {
   color: #cfe8ff;
 }
 
-/* ===== Botões ===== */
+/* ===== Botoes ===== */
 .btn-config {
   background-color: #00aa3e;
   color: #fff;
@@ -478,6 +486,7 @@ onMounted(async () => {
 }
 
 /* ===== Tabela de alunos ===== */
+/* secao ocupa o espaco livre dentro do card e deixa a tabela rolar */
 .alunos-section {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -485,6 +494,10 @@ onMounted(async () => {
   padding: 16px;
   color: #fff;
   margin: 16px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .table-header {
@@ -506,8 +519,12 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+/* wrapper com scroll horizontal e vertical */
 .table-wrapper {
+  flex: 1;
+  min-height: 0;
   overflow-x: auto;
+  overflow-y: auto;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
 }
@@ -554,15 +571,16 @@ onMounted(async () => {
   transition: background 0.2s ease;
 }
 
-/* ===== Rodapé ===== */
+/* ===== Rodape ===== */
 .page-footer {
   margin-top: auto;
   display: flex;
   justify-content: flex-end;
   padding: 0 16px 16px;
+  flex-shrink: 0;
 }
 
-/* ===== Sidebar móvel ===== */
+/* ===== Sidebar movel ===== */
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.2s ease;
 }
@@ -622,12 +640,13 @@ onMounted(async () => {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-height: auto;
   }
   .sidebar-slot {
     display: none;
   }
   .alunos-section {
-    margin: 0;
+    margin: 0 0 16px 0;
   }
 }
 
