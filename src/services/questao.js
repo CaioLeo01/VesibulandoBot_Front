@@ -31,3 +31,10 @@ export async function deletarQuestao(cod_questao) {
 export async function listarQuestoesPorMateria(cod_materia) {
     return apiFetch(`${baseUrl}/materia/${cod_materia}`, { method: 'GET' })
 }
+
+export async function importarEnem(anos, materias) {
+    return apiFetch(`${baseUrl}/importar-enem`, {
+        method: 'POST',
+        body: { anos, materias }
+    })
+}

@@ -61,3 +61,16 @@ export async function associarAlunosProfessor(codProfessor) {
 
   return await res.json()
 }
+
+// Atualizar usuário
+export async function putAtualizarUsuario(codUsuario, { nome, email }) {
+  const res = await fetch(`${BASE_URL}/usuario/${codUsuario}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ nome, email }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.erro || `Erro ao atualizar usuário: ${res.status}`)
+  return data?.usuario || data?.user || data?.data || data
+}

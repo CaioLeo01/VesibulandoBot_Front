@@ -27,7 +27,12 @@
               <p class="header-sub">Visualize e gerencie suas informações pessoais.</p>
             </div>
             <div class="profile-actions">
-              <button class="btn btn-config" @click="editarPerfil">Editar Perfil</button>
+              <button class="btn btn-config" :disabled="saving" @click="onPrimaryAction">
+                {{ editMode ? (saving ? 'Salvando…' : 'Salvar') : 'Editar Perfil' }}
+              </button>
+              <button v-if="editMode" class="btn btn-logout" type="button" :disabled="saving" @click="cancelarEdicao">
+                Cancelar
+              </button>
             </div>
           </header>
 
@@ -45,7 +50,7 @@
                 {{ initials }}
               </div>
               <div class="profile-info">
-                <h3>{{ user.nome || user.nome_usuario || 'Usuário' }}</h3>
+                <h3>{{ displayName }}</h3>
                 <p>{{ user.email || '—' }}</p>
               </div>
             </div>
@@ -57,15 +62,42 @@
                 <strong>Código</strong>
                 <span>{{ user.cod_usuario ?? '—' }}</span>
               </div>
+
               <div class="detail-box">
                 <strong>Nome</strong>
-                <span>{{ user.nome || user.nome_usuario || '—' }}</span>
+                <template v-if="!editMode">
+                  <span>{{ user.nome || user.nome_usuario || '—' }}</span>
+                </template>
+                <template v-else>
+                  <input
+                    v-model.trim="editable.nome"
+                    :disabled="saving"
+                    type="text"
+                    class="inplace-input"
+                    placeholder="Seu nome"
+                  />
+                </template>
               </div>
+
               <div class="detail-box">
                 <strong>E-mail</strong>
-                <span>{{ user.email || '—' }}</span>
+                <template v-if="!editMode">
+                  <span>{{ user.email || '—' }}</span>
+                </template>
+                <template v-else>
+                  <input
+                    v-model.trim="editable.email"
+                    :disabled="saving"
+                    type="email"
+                    class="inplace-input"
+                    placeholder="Seu e-mail"
+                  />
+                </template>
               </div>
             </div>
+
+            <p v-if="editError" class="error mt-2">{{ editError }}</p>
+            <p v-if="savedOnce && !editError && !saving && !editMode" class="ok mt-2">Perfil atualizado com sucesso.</p>
           </div>
         </section>
       </div>
@@ -95,6 +127,7 @@ import { useRouter } from 'vue-router'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import { logout as doLogout } from '@/services/auth.js'
 import logoUrl from '@/assets/Icone.ico'
+import { getUsuarioLogado, putAtualizarUsuario } from '@/services/usuario.js'
 
 const router = useRouter()
 const logo = logoUrl
@@ -104,7 +137,12 @@ const loading = ref(true)
 const error = ref(null)
 const sidebarOpen = ref(false)
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '')
+const editMode = ref(false)
+const saving = ref(false)
+const editError = ref(null)
+const savedOnce = ref(false)
+
+const editable = ref({ nome: '', email: '' })
 
 const displayName = computed(() =>
   user.value.nome || user.value.nome_usuario || user.value.name || user.value.email || 'Usuário'
@@ -115,36 +153,19 @@ const initials = computed(() => {
   return nome ? nome[0].toUpperCase() : '?'
 })
 
-async function fetchUser() {
+async function carregarUsuario() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch(`${API_BASE}/usuario/logado`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: { 'Accept': 'application/json' }
-    })
-
-    if (!res.ok) {
-      let msg = `HTTP ${res.status}`
-      try {
-        const body = await res.json()
-        if (body && (body.error || body.erro || body.message)) {
-          msg = body.error || body.erro || body.message
-        }
-      } catch {}
-      throw new Error(`Falha ao buscar dados do usuário: ${msg}`)
-    }
-
-    const payload = await res.json()
+    const payload = await getUsuarioLogado()
     user.value =
       payload?.usuario ||
       payload?.user ||
       payload?.data ||
       (payload && Object.keys(payload).length ? payload : {})
-  } catch (err) {
-    console.error('fetchUser error', err)
-    error.value = err.message || 'Erro ao carregar usuário'
+  } catch (e) {
+    console.error('❌ Erro ao obter usuário logado:', e)
+    error.value = e.message || 'Erro ao carregar usuário'
   } finally {
     loading.value = false
   }
@@ -164,13 +185,66 @@ async function onLogout() {
   }
 }
 
-function editarPerfil() {
-  router.push({ name: 'EditarPerfil' }).catch(() => {})
+function startEdit() {
+  editable.value = {
+    id: user.value.id ?? user.value.cod_usuario,
+    nome: user.value.nome || user.value.nome_usuario || '',
+    email: user.value.email || '',
+  }
+  editError.value = null
+  editMode.value = true
 }
 
-onMounted(fetchUser)
-</script>
+function cancelarEdicao() {
+  editMode.value = false
+  editError.value = null
+}
 
+async function salvarPerfil() {
+  editError.value = null
+
+  if (!editable.value.nome?.trim()) {
+    editError.value = 'Informe um nome válido.'
+    return
+  }
+  if (!editable.value.email?.trim()) {
+    editError.value = 'Informe um e-mail válido.'
+    return
+  }
+
+  const targetId = editable.value.id || user.value.cod_usuario || user.value.id
+  if (!targetId) {
+    editError.value = 'Não foi possível identificar o usuário para atualização.'
+    return
+  }
+
+  saving.value = true
+  try {
+    const atualizado = await putAtualizarUsuario(targetId, {
+      nome: editable.value.nome,
+      email: editable.value.email,
+    })
+
+    const novo = atualizado?.usuario || atualizado?.user || atualizado?.data || atualizado
+    user.value = { ...user.value, ...novo }
+
+    savedOnce.value = true
+    editMode.value = false
+  } catch (e) {
+    console.error('salvarPerfil error', e)
+    editError.value = e.message || 'Não foi possível salvar as alterações.'
+  } finally {
+    saving.value = false
+  }
+}
+
+function onPrimaryAction() {
+  if (!editMode.value) return startEdit()
+  return salvarPerfil()
+}
+
+onMounted(carregarUsuario)
+</script>
 
 <style scoped>
 :root, :host {
@@ -301,7 +375,6 @@ onMounted(fetchUser)
   }
 }
 
-
 .header-sub {
   margin-top: 6px;
   color: #cfe8ff;
@@ -376,6 +449,18 @@ onMounted(fetchUser)
   font-size: 15px;
 }
 
+/* ===== Inputs inline ===== */
+.inplace-input {
+  width: 95%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(6, 25, 39, 0.6);
+  color: #e7f3ff;
+  outline: none;
+}
+.inplace-input:disabled { opacity: .7; cursor: not-allowed; }
+
 /* ===== Ações ===== */
 .profile-actions {
   display: flex;
@@ -416,6 +501,11 @@ onMounted(fetchUser)
   transform: translateY(-1px);
   box-shadow: 0 10px 24px rgba(239, 68, 68, 0.3);
 }
+
+/* feedback */
+.error { color: #fecaca; }
+.ok { color: #bbf7d0; }
+.mt-2 { margin-top: 8px; }
 
 /* ===== Mobile Sidebar ===== */
 .mobile-sidebar-overlay {
@@ -479,7 +569,4 @@ onMounted(fetchUser)
     display: none;
   }
 }
-
-
 </style>
-
