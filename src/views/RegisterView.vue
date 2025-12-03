@@ -22,14 +22,9 @@
             {{ loading ? 'Enviando...' : 'Registrar-se' }}
           </button>
 
-          <!-- ⬇️ separador -->
-          <div class="or">Ou</div>
+         
 
-          <!-- Botão Google com PNG -->
-          <button type="button" class="google" @click="loginWithGoogle">
-            <img :src="googleLogo" class="glogoimg" alt="Google" width="22" height="22" />
-            Continuar com Google
-          </button>
+          
 
           <RouterLink class="alt" :to="{ name: 'Login' }">Já tenho conta</RouterLink>
 
