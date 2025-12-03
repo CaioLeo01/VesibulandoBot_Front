@@ -1,7 +1,7 @@
 <template>
   <section class="chat">
     <header class="chat-header">
-      <h2>Chat</h2>
+      <h2>APROVABOT</h2>
 
       <div class="header-right">
         <button class="export-btn" @click="exportConversation">

@@ -53,7 +53,7 @@
           <button class="btn" @click="close">Cancelar</button>
           <button
             class="btn btn-accent"
-            :disabled="!podeSalvar"
+            :disabled="!podeSalvar || carregando"
             @click="salvar"
           >
             Gerar
@@ -77,29 +77,27 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'salvo'])
 
 const materias = ref([])
-const questoes = ref([]) // pool agregado de questões com base nas matérias marcadas
+const questoes = ref([])
 const carregando = ref(false)
 const usuario = ref(null)
 
 const local = reactive({
-  // titulo/descricao NÃO são exibidos — serão gerados automaticamente no salvar()
   materiasSelecionadas: [],
-  qtdQuestoes: 10, // default
+  qtdQuestoes: 10,
 })
 
-// computeds
 const totalQuestoesDisponiveis = computed(() => questoes.value.length)
 
 const podeSalvar = computed(() => {
   const qtd = Number(local.qtdQuestoes || 0)
   return (
     local.materiasSelecionadas.length > 0 &&
-    qtd >= 1 && qtd <= 40 &&
+    qtd >= 1 &&
+    qtd <= 40 &&
     totalQuestoesDisponiveis.value > 0
   )
 })
 
-/* === Métodos === */
 async function carregarMaterias() {
   try {
     carregando.value = true
@@ -121,20 +119,38 @@ async function carregarUsuario() {
 
 async function carregarQuestoes() {
   try {
-    questoes.value = []
+    carregando.value = true
+
+    const pool = []
+
     for (const cod of local.materiasSelecionadas) {
-      const lista = await listarQuestoesPorMateria(cod)
-      if (Array.isArray(lista)) questoes.value.push(...lista)
+      const resp = await listarQuestoesPorMateria(cod)
+
+      let listaMateria = []
+
+      if (Array.isArray(resp)) {
+        listaMateria = resp
+      } else if (resp && typeof resp === 'object') {
+        const prof = Array.isArray(resp.professor) ? resp.professor : []
+        const enem = Array.isArray(resp.enem) ? resp.enem : []
+        listaMateria = [...prof, ...enem]
+      }
+
+      pool.push(...listaMateria)
     }
-    // garantir unicidade por cod_questao (se vierem repetidas ao cruzar matérias)
+
     const seen = new Set()
-    questoes.value = questoes.value.filter(q => {
+    questoes.value = pool.filter(q => {
+      if (!q || typeof q.cod_questao === 'undefined') return false
       if (seen.has(q.cod_questao)) return false
       seen.add(q.cod_questao)
       return true
     })
+
   } catch (e) {
     console.error('❌ Erro ao carregar questões:', e)
+  } finally {
+    carregando.value = false
   }
 }
 
@@ -145,7 +161,6 @@ function formatarDataDDMM(d = new Date()) {
 }
 
 function embaralhar(array) {
-  // Fisher–Yates
   const a = [...array]
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -158,18 +173,16 @@ async function salvar() {
   try {
     carregando.value = true
 
-    // monta título/descrição automáticos (não exibidos na UI)
     const nome = usuario.value?.nome_usuario || 'Aluno'
     const data = formatarDataDDMM()
     const tituloAuto = `Simulado ${nome} ${data}`
     const descricaoAuto = `Simulado ${nome} ${data}`
 
-    // cria o simulado com as matérias
     const sim = await criarSimulado({
       titulo: tituloAuto,
       descricao: descricaoAuto,
       ativo: true,
-      cod_materias: local.materiasSelecionadas
+      cod_materias: local.materiasSelecionadas,
     })
 
     const idSimulado = sim?.cod_simulado
@@ -178,20 +191,20 @@ async function salvar() {
       return
     }
 
-    // sorteia questões aleatórias do pool
-    const qtdSolicitada = Math.max(1, Math.min(Number(local.qtdQuestoes || 1), 40))
+    const qtdSolicitada = Math.max(
+      1,
+      Math.min(Number(local.qtdQuestoes || 1), 40)
+    )
     const pool = embaralhar(questoes.value)
     const selecionadas = pool.slice(0, Math.min(qtdSolicitada, pool.length))
 
-    // adiciona questões ao simulado
     for (const q of selecionadas) {
       await adicionarQuestaoSimulado(idSimulado, { cod_questao: q.cod_questao })
     }
 
     emit('salvo', {
       ...sim,
-      // extra opcional para quem consome
-      quantidade: selecionadas.length
+      quantidade: selecionadas.length,
     })
     close()
   } catch (e) {
@@ -206,24 +219,24 @@ function close() {
   emit('update:modelValue', false)
 }
 
-watch(() => props.modelValue, async open => {
-  if (open) {
-    await Promise.all([carregarUsuario(), carregarMaterias()])
-    // reset dos campos visíveis
-    Object.assign(local, {
-      materiasSelecionadas: [],
-      qtdQuestoes: 10,
-    })
-    questoes.value = []
-  } else {
-    // limpeza ao fechar
-    questoes.value = []
+watch(
+  () => props.modelValue,
+  async open => {
+    if (open) {
+      await Promise.all([carregarUsuario(), carregarMaterias()])
+      Object.assign(local, {
+        materiasSelecionadas: [],
+        qtdQuestoes: 10,
+      })
+      questoes.value = []
+    } else {
+      questoes.value = []
+    }
   }
-})
+)
 </script>
 
 <style scoped>
-/* mesmo visual do seu modal anterior, sem campos de título/descrição */
 .overlay {
   position: fixed;
   inset: 0;
@@ -274,13 +287,20 @@ watch(() => props.modelValue, async open => {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
-.modal-body::-webkit-scrollbar { width: 8px; }
+.modal-body::-webkit-scrollbar {
+  width: 8px;
+}
 .modal-body::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.3);
   border-radius: 4px;
 }
-.field { color: #fff; display: grid; gap: 8px; }
-.input, textarea {
+.field {
+  color: #fff;
+  display: grid;
+  gap: 8px;
+}
+.input,
+textarea {
   width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.25);
@@ -291,7 +311,10 @@ watch(() => props.modelValue, async open => {
   font-size: 14px;
   box-sizing: border-box;
 }
-.hint { color: #cfe8ff; font-size: 12px; }
+.hint {
+  color: #cfe8ff;
+  font-size: 12px;
+}
 .materias-list {
   display: flex;
   flex-direction: column;
@@ -335,5 +358,8 @@ watch(() => props.modelValue, async open => {
   border: 1px solid #4ade80;
   color: #fff;
 }
-.btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-accent:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>
