@@ -30,7 +30,6 @@
             </div>
           </header>
           <br>
-          <button class="btn btn-config" @click="openFiltro">Filtros</button>
         </section>
 
         <!-- Grid principal -->
